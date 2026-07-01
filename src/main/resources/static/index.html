@@ -1,159 +1,217 @@
-<!doctype html>
-<html lang="ru">
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="dark">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>B24 Support</title>
-    <style>
-        :root {
-            --bg: #0b1020;
-            --panel: rgba(255,255,255,.08);
-            --panel-strong: rgba(255,255,255,.12);
-            --text: #f5f7fb;
-            --muted: #9da8c1;
-            --accent: #75e6c9;
-            --danger: #ff7b7b;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            color: var(--text);
-            background:
-                radial-gradient(circle at top left, rgba(117,230,201,.2), transparent 34rem),
-                radial-gradient(circle at right, rgba(104,126,255,.18), transparent 28rem),
-                var(--bg);
-        }
-        .page {
-            width: min(1120px, calc(100% - 32px));
-            margin: 0 auto;
-            padding: 44px 0;
-        }
-        .hero {
-            display: grid;
-            grid-template-columns: 1.2fr .8fr;
-            gap: 24px;
-            align-items: stretch;
-        }
-        .card {
-            border: 1px solid rgba(255,255,255,.12);
-            background: var(--panel);
-            border-radius: 28px;
-            padding: 28px;
-            box-shadow: 0 20px 80px rgba(0,0,0,.28);
-            backdrop-filter: blur(14px);
-        }
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
-            border-radius: 999px;
-            background: rgba(117,230,201,.12);
-            color: var(--accent);
-            font-weight: 700;
-            font-size: 13px;
-            letter-spacing: .02em;
-        }
-        h1 {
-            margin: 20px 0 12px;
-            font-size: clamp(34px, 6vw, 64px);
-            line-height: .95;
-            letter-spacing: -.05em;
-        }
-        p {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.65;
-            font-size: 16px;
-        }
-        .grid {
-            margin-top: 24px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 14px;
-        }
-        .metric {
-            padding: 18px;
-            background: var(--panel-strong);
-            border-radius: 20px;
-            min-height: 104px;
-        }
-        .metric b {
-            display: block;
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-        .metric span {
-            color: var(--muted);
-            font-size: 13px;
-        }
-        pre {
-            white-space: pre-wrap;
-            word-break: break-word;
-            margin: 18px 0 0;
-            padding: 18px;
-            border-radius: 18px;
-            background: rgba(0,0,0,.24);
-            color: #d7ffe9;
-            min-height: 160px;
-        }
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--danger);
-            display: inline-block;
-        }
-        .status-dot.ok { background: var(--accent); }
-        @media (max-width: 800px) {
-            .hero, .grid { grid-template-columns: 1fr; }
-        }
-    </style>
+    <meta charset="UTF-8">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B24 SUPPORT | Control Center</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="page">
-    <section class="hero">
-        <div class="card">
-            <div class="badge"><span class="status-dot" id="dot"></span> <span id="state">Проверяем backend</span></div>
-            <h1>Техподдержка Bitrix24</h1>
-            <p>
-                Центральный маршрутизатор обращений между клиентскими порталами Bitrix24
-                и общим админским чатом компании «Умные продажи».
-            </p>
-            <div class="grid">
-                <div class="metric"><b id="portalCount">—</b><span>подключённых порталов</span></div>
-                <div class="metric"><b>8443</b><span>HTTPS-порт на текущем VPS</span></div>
-                <div class="metric"><b>OK</b><span>Spring Boot bootstrap</span></div>
+<div class="app-shell">
+    <header class="top-brand-header">
+        <div class="brand-header-inner">
+            <div class="brand-mark" aria-hidden="true">
+                <svg class="brand-icon" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6.5 8.5h11"></path>
+                    <path d="M6.5 12h7.8"></path>
+                    <path d="M6.5 15.5h5"></path>
+                    <path d="M17.7 14.2 21 17.5l-3.3 3.3"></path>
+                    <path d="M13.8 17.5H21"></path>
+                    <rect x="3" y="4" width="18" height="16" rx="4"></rect>
+                </svg>
+            </div>
+            <div class="brand-info">
+                <span class="brand-title">B24 SUPPORT</span>
+                <div class="brand-divider"></div>
+                <div class="brand-subtitle">
+                    <span>Control</span>
+                    <span>Center</span>
+                </div>
             </div>
         </div>
-        <div class="card">
-            <div class="badge">/api/bootstrap/status</div>
-            <pre id="json">Загрузка...</pre>
+
+        <nav class="top-nav-menu" aria-label="Разделы B24 Support">
+            <button class="top-nav-link active" type="button" data-page="overview">Обзор</button>
+            <button class="top-nav-link" type="button" data-page="portals">Порталы</button>
+            <button class="top-nav-link" type="button" data-page="messages">Сообщения</button>
+            <button class="top-nav-link" type="button" data-page="settings">Настройки</button>
+        </nav>
+
+        <div class="top-actions">
+            <span id="syncIndicator" class="sync-indicator d-none">Обновление...</span>
+            <button id="btnRefresh" class="btn btn-flat" type="button">Обновить</button>
         </div>
-    </section>
-</main>
-<script>
-    async function loadStatus() {
-        const dot = document.getElementById('dot');
-        const state = document.getElementById('state');
-        const json = document.getElementById('json');
-        const portalCount = document.getElementById('portalCount');
-        try {
-            const response = await fetch('/api/bootstrap/status', { cache: 'no-store' });
-            const data = await response.json();
-            dot.classList.add('ok');
-            state.textContent = 'Backend работает';
-            portalCount.textContent = String(data.portalCount ?? 0);
-            json.textContent = JSON.stringify(data, null, 2);
-        } catch (error) {
-            dot.classList.remove('ok');
-            state.textContent = 'Backend недоступен';
-            json.textContent = String(error);
-        }
-    }
-    loadStatus();
-</script>
+    </header>
+
+    <main class="app-layout">
+        <aside class="projects-panel">
+            <div class="panel-section-title">Маршрутизация</div>
+            <button id="btnAddPortal" class="history-header" type="button">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+                <span>Добавить портал</span>
+            </button>
+            <div class="history-divider"></div>
+            <div id="portalNavList" class="history-list"></div>
+        </aside>
+
+        <section class="workspace-panel">
+            <div id="overviewPage" class="dashboard-zone page-section">
+                <div class="project-workspace wide-workspace">
+                    <div class="workspace-heading">
+                        <div>
+                            <div class="eyebrow">Состояние системы</div>
+                            <h1 class="workspace-title">Техподдержка «Умные продажи»</h1>
+                            <div class="workspace-meta">Единый маршрутизатор сообщений между клиентскими Bitrix24 и общим админским чатом.</div>
+                        </div>
+                        <div class="workspace-actions">
+                            <span id="backendStatePill" class="status-pill">Проверка</span>
+                        </div>
+                    </div>
+
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Всего порталов</div>
+                            <div id="metricTotal" class="metric-value">—</div>
+                            <div class="metric-hint">админский + клиентские подключения</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Админский Bitrix24</div>
+                            <div id="metricAdmin" class="metric-value">—</div>
+                            <div class="metric-hint">единый чат операторов поддержки</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Клиенты</div>
+                            <div id="metricClients" class="metric-value">—</div>
+                            <div class="metric-hint">порталы, откуда будут идти обращения</div>
+                        </div>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-card left-info-card">
+                            <div class="eyebrow">Ближайший шаг</div>
+                            <h2>Подключить админский Bitrix24</h2>
+                            <p>Добавь портал своей компании, затем выберем сотрудников поддержки и создадим общий чат «Техподдержка админ».</p>
+                            <button class="btn btn-save mt-3" type="button" data-open-admin-create>Добавить админский портал</button>
+                        </div>
+
+                        <div class="info-card">
+                            <div class="eyebrow">Backend</div>
+                            <pre id="bootstrapJson" class="json-panel">Загрузка...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="portalsPage" class="dashboard-zone page-section d-none">
+                <div class="project-workspace wide-workspace">
+                    <div class="workspace-heading transfer-heading">
+                        <div>
+                            <div class="eyebrow">Подключения</div>
+                            <h2 class="workspace-title">Порталы Bitrix24</h2>
+                            <div class="workspace-meta">Сейчас это базовый реестр подключений. На следующем шаге добавим проверку webhook/API и создание бота.</div>
+                        </div>
+                        <div class="transfer-actions">
+                            <button id="btnAddPortalTop" class="btn btn-save" type="button">Добавить портал</button>
+                        </div>
+                    </div>
+
+                    <div id="portalNotice" class="bitrix-notice"></div>
+                    <div id="portalCards" class="portal-grid"></div>
+                </div>
+            </div>
+
+            <div id="messagesPage" class="dashboard-zone page-section d-none">
+                <div class="empty-state text-center">
+                    <h2 class="fw-semibold text-white mb-3">Журнал сообщений</h2>
+                    <p class="text-secondary m-0">Этот раздел подключим после регистрации ботов и первых входящих событий Bitrix24.</p>
+                </div>
+            </div>
+
+            <div id="settingsPage" class="dashboard-zone page-section d-none">
+                <div class="project-workspace">
+                    <div class="workspace-heading">
+                        <div>
+                            <div class="eyebrow">Настройки</div>
+                            <h2 class="workspace-title">Системные параметры</h2>
+                            <div class="workspace-meta">Базовая инфраструктура уже поднята. Далее здесь появятся настройки OAuth, токенов и шаблонов сообщений.</div>
+                        </div>
+                    </div>
+                    <div class="info-card text-start">
+                        <p class="mb-2"><b>Public URL:</b> <span id="publicBaseUrl">—</span></p>
+                        <p class="mb-0"><b>Webhook endpoint будущего бота:</b> <span class="code-inline">/api/bitrix/events</span></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div id="portalModal" class="modal-backdrop-custom d-none" aria-hidden="true">
+    <div class="modal-card modal-custom">
+        <div class="modal-header-custom">
+            <div>
+                <div id="portalModalStep" class="modal-step-label">Портал Bitrix24</div>
+                <h5 id="portalModalTitle" class="m-0 fw-semibold text-white">Добавить портал</h5>
+            </div>
+            <button id="btnClosePortalModal" type="button" class="btn-close-custom">✕</button>
+        </div>
+
+        <form id="portalForm" class="modal-form">
+            <input id="portalId" type="hidden">
+
+            <div class="two-col-form">
+                <div>
+                    <label class="form-label">Тип портала</label>
+                    <select id="portalRole" class="form-select custom-input" required>
+                        <option value="ADMIN">Админский Bitrix24</option>
+                        <option value="CLIENT">Клиентский Bitrix24</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Код клиента</label>
+                    <input id="portalClientCode" class="form-control custom-input" placeholder="auto / c_00037">
+                </div>
+            </div>
+
+            <label class="form-label mt-3">Название</label>
+            <input id="portalTitle" class="form-control custom-input" placeholder="ООО Ромашка / Умные продажи" required>
+
+            <label class="form-label mt-3">Домен Bitrix24</label>
+            <input id="portalDomain" class="form-control custom-input" placeholder="example.bitrix24.ru" required>
+
+            <label class="form-label mt-3">Webhook / REST URL</label>
+            <input id="portalWebhookUrl" class="form-control custom-input" placeholder="https://.../rest/.../">
+            <div class="field-hint">Пока сохраняем для будущего REST-вызова. Проверку и регистрацию бота добавим следующим шагом.</div>
+
+            <div class="two-col-form mt-3">
+                <div>
+                    <label class="form-label">member_id</label>
+                    <input id="portalMemberId" class="form-control custom-input" placeholder="опционально">
+                </div>
+                <div>
+                    <label class="form-label">Статус</label>
+                    <select id="portalStatus" class="form-select custom-input">
+                        <option value="DRAFT">Черновик</option>
+                        <option value="ACTIVE">Активен</option>
+                        <option value="ERROR">Ошибка</option>
+                        <option value="DISABLED">Отключён</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="portalFormError" class="form-error d-none"></div>
+
+            <div class="modal-actions">
+                <button id="btnDeletePortal" class="btn btn-danger-soft me-auto d-none" type="button">Удалить</button>
+                <button class="btn btn-flat" type="button" data-close-modal>Отмена</button>
+                <button class="btn btn-save" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
