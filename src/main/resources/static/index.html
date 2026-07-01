@@ -25,16 +25,14 @@
             <div class="brand-info">
                 <span class="brand-title">B24 SUPPORT</span>
                 <div class="brand-divider"></div>
-                <div class="brand-subtitle">
-                    <span>Control</span>
-                    <span>Center</span>
-                </div>
+                <div class="brand-subtitle"><span>Control</span><span>Center</span></div>
             </div>
         </div>
 
         <nav class="top-nav-menu" aria-label="Разделы B24 Support">
             <button class="top-nav-link active" type="button" data-page="overview">Обзор</button>
             <button class="top-nav-link" type="button" data-page="portals">Порталы</button>
+            <button class="top-nav-link" type="button" data-page="admin">Админский чат</button>
             <button class="top-nav-link" type="button" data-page="messages">Сообщения</button>
             <button class="top-nav-link" type="button" data-page="settings">Настройки</button>
         </nav>
@@ -71,32 +69,23 @@
                     </div>
 
                     <div class="metrics-grid">
-                        <div class="metric-card">
-                            <div class="metric-label">Всего порталов</div>
-                            <div id="metricTotal" class="metric-value">—</div>
-                            <div class="metric-hint">админский + клиентские подключения</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">Админский Bitrix24</div>
-                            <div id="metricAdmin" class="metric-value">—</div>
-                            <div class="metric-hint">единый чат операторов поддержки</div>
-                        </div>
-                        <div class="metric-card">
-                            <div class="metric-label">Клиенты</div>
-                            <div id="metricClients" class="metric-value">—</div>
-                            <div class="metric-hint">порталы, откуда будут идти обращения</div>
-                        </div>
+                        <div class="metric-card"><div class="metric-label">Всего порталов</div><div id="metricTotal" class="metric-value">—</div><div class="metric-hint">админский + клиентские подключения</div></div>
+                        <div class="metric-card"><div class="metric-label">Админский Bitrix24</div><div id="metricAdmin" class="metric-value">—</div><div class="metric-hint">общий чат операторов поддержки</div></div>
+                        <div class="metric-card"><div class="metric-label">Клиенты</div><div id="metricClients" class="metric-value">—</div><div class="metric-hint">порталы, откуда будут идти обращения</div></div>
                     </div>
 
                     <div class="info-grid">
-                        <div class="info-card left-info-card">
+                        <div class="info-card left-info-card text-start">
                             <div class="eyebrow">Ближайший шаг</div>
                             <h2>Подключить админский Bitrix24</h2>
-                            <p>Добавь портал своей компании, затем выберем сотрудников поддержки и создадим общий чат «Техподдержка админ».</p>
-                            <button class="btn btn-save mt-3" type="button" data-open-admin-create>Добавить админский портал</button>
+                            <p>Добавь портал своей компании, проверь webhook, загрузи сотрудников и отметь тех, кто будет работать в общем чате поддержки.</p>
+                            <div class="button-row mt-3">
+                                <button class="btn btn-save" type="button" data-open-admin-create>Добавить админский портал</button>
+                                <button class="btn btn-flat" type="button" data-switch-page="admin">Перейти к настройке</button>
+                            </div>
                         </div>
 
-                        <div class="info-card">
+                        <div class="info-card text-start">
                             <div class="eyebrow">Backend</div>
                             <pre id="bootstrapJson" class="json-panel">Загрузка...</pre>
                         </div>
@@ -110,15 +99,31 @@
                         <div>
                             <div class="eyebrow">Подключения</div>
                             <h2 class="workspace-title">Порталы Bitrix24</h2>
-                            <div class="workspace-meta">Сейчас это базовый реестр подключений. На следующем шаге добавим проверку webhook/API и создание бота.</div>
+                            <div class="workspace-meta">Базовый реестр порталов. Для админского портала уже доступна проверка webhook и загрузка сотрудников.</div>
+                        </div>
+                        <div class="transfer-actions"><button id="btnAddPortalTop" class="btn btn-save" type="button">Добавить портал</button></div>
+                    </div>
+                    <div id="portalNotice" class="bitrix-notice"></div>
+                    <div id="portalCards" class="portal-grid"></div>
+                </div>
+            </div>
+
+            <div id="adminPage" class="dashboard-zone page-section d-none">
+                <div class="project-workspace wide-workspace">
+                    <div class="workspace-heading transfer-heading">
+                        <div>
+                            <div class="eyebrow">Админский Bitrix24</div>
+                            <h2 class="workspace-title">Общий чат поддержки</h2>
+                            <div class="workspace-meta">На этом шаге backend проверяет REST-доступ к твоему Bitrix24 и загружает сотрудников для будущего группового чата.</div>
                         </div>
                         <div class="transfer-actions">
-                            <button id="btnAddPortalTop" class="btn btn-save" type="button">Добавить портал</button>
+                            <button id="btnAdminCreate" class="btn btn-save" type="button">Добавить админский портал</button>
                         </div>
                     </div>
 
-                    <div id="portalNotice" class="bitrix-notice"></div>
-                    <div id="portalCards" class="portal-grid"></div>
+                    <div id="adminNotice" class="bitrix-notice"></div>
+                    <div id="adminPortalPanel"></div>
+                    <div id="adminUsersPanel" class="mt-3"></div>
                 </div>
             </div>
 
@@ -135,7 +140,7 @@
                         <div>
                             <div class="eyebrow">Настройки</div>
                             <h2 class="workspace-title">Системные параметры</h2>
-                            <div class="workspace-meta">Базовая инфраструктура уже поднята. Далее здесь появятся настройки OAuth, токенов и шаблонов сообщений.</div>
+                            <div class="workspace-meta">Инфраструктура работает. Следующие настройки появятся после регистрации ботов и общего чата.</div>
                         </div>
                     </div>
                     <div class="info-card text-start">
@@ -182,8 +187,8 @@
             <input id="portalDomain" class="form-control custom-input" placeholder="example.bitrix24.ru" required>
 
             <label class="form-label mt-3">Webhook / REST URL</label>
-            <input id="portalWebhookUrl" class="form-control custom-input" placeholder="https://.../rest/.../">
-            <div class="field-hint">Пока сохраняем для будущего REST-вызова. Проверку и регистрацию бота добавим следующим шагом.</div>
+            <input id="portalWebhookUrl" class="form-control custom-input" placeholder="https://example.bitrix24.ru/rest/1/xxxxx/">
+            <div class="field-hint">Для текущего MVP используй входящий webhook с правами user и imbot.</div>
 
             <div class="two-col-form mt-3">
                 <div>
@@ -205,7 +210,7 @@
 
             <div class="modal-actions">
                 <button id="btnDeletePortal" class="btn btn-danger-soft me-auto d-none" type="button">Удалить</button>
-                <button class="btn btn-flat" type="button" data-close-modal>Отмена</button>
+                <button class="btn btn-flat" type="button" id="btnCancelPortal">Отмена</button>
                 <button class="btn btn-save" type="submit">Сохранить</button>
             </div>
         </form>

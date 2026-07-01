@@ -14,5 +14,7 @@ public interface PortalInstallationRepository extends JpaRepository<PortalInstal
 
     Optional<PortalInstallation> findByClientCode(String clientCode);
 
+    Optional<PortalInstallation> findFirstByRoleOrderByIdAsc(PortalRole role);
+
     long countByRole(PortalRole role);
 }
