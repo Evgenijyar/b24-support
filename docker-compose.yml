@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: b24-support-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-b24_support}
+      POSTGRES_USER: ${POSTGRES_USER:-b24_support}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - b24-support-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - b24-support-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: b24-support-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8088
+      APP_PUBLIC_BASE_URL: ${APP_PUBLIC_BASE_URL:-https://b24support.abs7.ru:8443}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-b24_support}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-b24_support}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Djava.security.egd=file:/dev/./urandom
+    ports:
+      - "127.0.0.1:8088:8088"
+    mem_limit: 768m
+    networks:
+      - b24-support-net
+
+volumes:
+  b24-support-postgres-data:
+
+networks:
+  b24-support-net:
+    name: b24-support-net
