@@ -34,6 +34,21 @@ public class PortalInstallation {
     @Column(name = "member_id", length = 255)
     private String memberId;
 
+    @Column(name = "webhook_url", columnDefinition = "text")
+    private String webhookUrl;
+
+    @Column(name = "bot_id", length = 255)
+    private String botId;
+
+    @Column(name = "support_dialog_id", length = 255)
+    private String supportDialogId;
+
+    @Column(name = "last_error", columnDefinition = "text")
+    private String lastError;
+
+    @Column(name = "connected_at")
+    private OffsetDateTime connectedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 24)
     private PortalStatus status;
@@ -55,6 +70,10 @@ public class PortalInstallation {
         this.status = PortalStatus.DRAFT;
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = this.createdAt;
+    }
+
+    public void markUpdated() {
+        this.updatedAt = OffsetDateTime.now();
     }
 
     public Long getId() {
@@ -99,6 +118,46 @@ public class PortalInstallation {
 
     public void setMemberId(String memberId) {
         this.memberId = memberId;
+    }
+
+    public String getWebhookUrl() {
+        return webhookUrl;
+    }
+
+    public void setWebhookUrl(String webhookUrl) {
+        this.webhookUrl = webhookUrl;
+    }
+
+    public String getBotId() {
+        return botId;
+    }
+
+    public void setBotId(String botId) {
+        this.botId = botId;
+    }
+
+    public String getSupportDialogId() {
+        return supportDialogId;
+    }
+
+    public void setSupportDialogId(String supportDialogId) {
+        this.supportDialogId = supportDialogId;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public void setLastError(String lastError) {
+        this.lastError = lastError;
+    }
+
+    public OffsetDateTime getConnectedAt() {
+        return connectedAt;
+    }
+
+    public void setConnectedAt(OffsetDateTime connectedAt) {
+        this.connectedAt = connectedAt;
     }
 
     public PortalStatus getStatus() {
