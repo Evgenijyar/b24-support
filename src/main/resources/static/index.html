@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>B24 Support</title>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: rgba(255,255,255,.08);
+            --panel-strong: rgba(255,255,255,.12);
+            --text: #f5f7fb;
+            --muted: #9da8c1;
+            --accent: #75e6c9;
+            --danger: #ff7b7b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(117,230,201,.2), transparent 34rem),
+                radial-gradient(circle at right, rgba(104,126,255,.18), transparent 28rem),
+                var(--bg);
+        }
+        .page {
+            width: min(1120px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 44px 0;
+        }
+        .hero {
+            display: grid;
+            grid-template-columns: 1.2fr .8fr;
+            gap: 24px;
+            align-items: stretch;
+        }
+        .card {
+            border: 1px solid rgba(255,255,255,.12);
+            background: var(--panel);
+            border-radius: 28px;
+            padding: 28px;
+            box-shadow: 0 20px 80px rgba(0,0,0,.28);
+            backdrop-filter: blur(14px);
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: rgba(117,230,201,.12);
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: .02em;
+        }
+        h1 {
+            margin: 20px 0 12px;
+            font-size: clamp(34px, 6vw, 64px);
+            line-height: .95;
+            letter-spacing: -.05em;
+        }
+        p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.65;
+            font-size: 16px;
+        }
+        .grid {
+            margin-top: 24px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+        .metric {
+            padding: 18px;
+            background: var(--panel-strong);
+            border-radius: 20px;
+            min-height: 104px;
+        }
+        .metric b {
+            display: block;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .metric span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 18px 0 0;
+            padding: 18px;
+            border-radius: 18px;
+            background: rgba(0,0,0,.24);
+            color: #d7ffe9;
+            min-height: 160px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+            display: inline-block;
+        }
+        .status-dot.ok { background: var(--accent); }
+        @media (max-width: 800px) {
+            .hero, .grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <section class="hero">
+        <div class="card">
+            <div class="badge"><span class="status-dot" id="dot"></span> <span id="state">Проверяем backend</span></div>
+            <h1>Техподдержка Bitrix24</h1>
+            <p>
+                Центральный маршрутизатор обращений между клиентскими порталами Bitrix24
+                и общим админским чатом компании «Умные продажи».
+            </p>
+            <div class="grid">
+                <div class="metric"><b id="portalCount">—</b><span>подключённых порталов</span></div>
+                <div class="metric"><b>8443</b><span>HTTPS-порт на текущем VPS</span></div>
+                <div class="metric"><b>OK</b><span>Spring Boot bootstrap</span></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="badge">/api/bootstrap/status</div>
+            <pre id="json">Загрузка...</pre>
+        </div>
+    </section>
+</main>
+<script>
+    async function loadStatus() {
+        const dot = document.getElementById('dot');
+        const state = document.getElementById('state');
+        const json = document.getElementById('json');
+        const portalCount = document.getElementById('portalCount');
+        try {
+            const response = await fetch('/api/bootstrap/status', { cache: 'no-store' });
+            const data = await response.json();
+            dot.classList.add('ok');
+            state.textContent = 'Backend работает';
+            portalCount.textContent = String(data.portalCount ?? 0);
+            json.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            dot.classList.remove('ok');
+            state.textContent = 'Backend недоступен';
+            json.textContent = String(error);
+        }
+    }
+    loadStatus();
+</script>
+</body>
+</html>
