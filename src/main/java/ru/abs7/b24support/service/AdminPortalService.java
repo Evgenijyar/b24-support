@@ -1,8 +1,8 @@
 package ru.abs7.b24support.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -241,7 +241,7 @@ public class AdminPortalService {
     private String toJson(JsonNode node) {
         try {
             return objectMapper.writeValueAsString(node);
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             return node.toString();
         }
     }

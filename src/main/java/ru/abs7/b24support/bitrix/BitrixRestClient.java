@@ -1,7 +1,7 @@
 package ru.abs7.b24support.bitrix;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -54,13 +54,15 @@ public class BitrixRestClient {
             }
 
             return root;
-        } catch (IOException e) {
-            throw new BitrixRestException("Не удалось прочитать ответ Bitrix24", e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new BitrixRestException("REST-запрос к Bitrix24 был прерван", e);
         } catch (IllegalArgumentException e) {
             throw new BitrixRestException("Некорректный webhook URL Bitrix24", e);
+        } catch (IOException e) {
+            throw new BitrixRestException("Не удалось прочитать ответ Bitrix24", e);
+        } catch (Exception e) {
+            throw new BitrixRestException("Не удалось обработать JSON-ответ Bitrix24", e);
         }
     }
 
