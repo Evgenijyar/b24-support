@@ -1,25 +1,11 @@
 package ru.abs7.b24support.config;
 
-import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class JpaFlywayDependencyConfig {
-
-    @Bean
-    public static BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
-        return beanFactory -> {
-            if (!beanFactory.containsBeanDefinition("entityManagerFactory")) {
-                return;
-            }
-            if (!beanFactory.containsBeanDefinition("flyway")) {
-                return;
-            }
-
-            BeanDefinition entityManagerFactory = beanFactory.getBeanDefinition("entityManagerFactory");
-            entityManagerFactory.setDependsOn("flyway");
-        };
+/**
+ * Kept as a harmless compatibility stub so that old local copies of the file
+ * are overwritten. Spring Boot 4.1 + spring-boot-starter-flyway handles
+ * Flyway/JPA ordering through its own auto-configuration.
+ */
+public final class JpaFlywayDependencyConfig {
+    private JpaFlywayDependencyConfig() {
     }
 }
