@@ -48,6 +48,9 @@ function cacheElements() {
     els.portalForm = document.getElementById('portalForm');
     els.portalFormError = document.getElementById('portalFormError');
     els.btnDeletePortal = document.getElementById('btnDeletePortal');
+    els.portalClientActions = document.getElementById('portalClientActions');
+    els.btnModalClientTest = document.getElementById('btnModalClientTest');
+    els.btnModalClientRegisterBot = document.getElementById('btnModalClientRegisterBot');
 }
 
 function bindEvents() {
@@ -73,6 +76,22 @@ function bindEvents() {
     });
     els.portalForm.addEventListener('submit', savePortalFromForm);
     els.btnDeletePortal.addEventListener('click', deleteCurrentPortal);
+    if (els.btnModalClientTest) {
+        els.btnModalClientTest.addEventListener('click', async () => {
+            const portalId = els.btnModalClientTest.dataset.portalId;
+            if (!portalId) return;
+            closePortalModal();
+            await clientAction(portalId, 'test-connection', 'Клиентский портал проверен');
+        });
+    }
+    if (els.btnModalClientRegisterBot) {
+        els.btnModalClientRegisterBot.addEventListener('click', async () => {
+            const portalId = els.btnModalClientRegisterBot.dataset.portalId;
+            if (!portalId) return;
+            closePortalModal();
+            await clientAction(portalId, 'bot/register', 'Клиентский бот создан / проверен');
+        });
+    }
     els.btnRefresh.addEventListener('click', loadAll);
 
     els.portalNavList.addEventListener('click', event => {
@@ -172,6 +191,18 @@ function renderPortalCards() {
                 </div>
                 <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
             </div>
+
+            ${portal.role === 'CLIENT' ? `
+                <div class="client-action-strip">
+                    <div>
+                        <div class="eyebrow mb-1">Настройка клиентского бота</div>
+                        <div class="field-hint m-0">Проверь webhook клиента и зарегистрируй бота для маршрута клиент → админский чат.</div>
+                    </div>
+                    <div class="button-row">
+                        <button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить webhook</button>
+                        <button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button>
+                    </div>
+                </div>` : ''}
 
             <div class="portal-meta-grid">
                 <div><span>Код</span><b>${escapeHtml(portal.clientCode)}</b></div>
@@ -560,6 +591,17 @@ function openPortalModal(portal = {}) {
     els.portalMemberId.value = portal.memberId || '';
     els.portalStatus.value = portal.status || 'DRAFT';
 
+    const showClientActions = Boolean(portal.id && portal.role === 'CLIENT');
+    if (els.portalClientActions) {
+        els.portalClientActions.classList.toggle('d-none', !showClientActions);
+    }
+    if (els.btnModalClientTest) {
+        els.btnModalClientTest.dataset.portalId = showClientActions ? portal.id : '';
+    }
+    if (els.btnModalClientRegisterBot) {
+        els.btnModalClientRegisterBot.dataset.portalId = showClientActions ? portal.id : '';
+    }
+
     els.portalModal.classList.remove('d-none');
     els.portalModal.setAttribute('aria-hidden', 'false');
     setTimeout(() => els.portalTitle.focus(), 0);
@@ -568,6 +610,9 @@ function openPortalModal(portal = {}) {
 function closePortalModal() {
     els.portalModal.classList.add('d-none');
     els.portalModal.setAttribute('aria-hidden', 'true');
+    if (els.portalClientActions) els.portalClientActions.classList.add('d-none');
+    if (els.btnModalClientTest) els.btnModalClientTest.dataset.portalId = '';
+    if (els.btnModalClientRegisterBot) els.btnModalClientRegisterBot.dataset.portalId = '';
     state.editingPortal = null;
 }
 
