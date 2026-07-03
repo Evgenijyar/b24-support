@@ -35,7 +35,7 @@ public class ClientPortalService {
     private static final String CLIENT_BOT_CODE = "smart_sales_support_client_bot";
     private static final String CLIENT_BOT_TYPE = "bot";
     private static final String CLIENT_BOT_NAME = "Техподдержка «Умные продажи»";
-    private static final Pattern CLIENT_CODE_COMMAND = Pattern.compile("^\\s*#([A-Za-z0-9_-]+)\\s+(.+)$", Pattern.DOTALL);
+    private static final Pattern CLIENT_CODE_COMMAND = Pattern.compile("^\\s*#?(c_[A-Za-z0-9_-]+)\\s+(.+)$", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     private final PortalInstallationRepository portalRepository;
     private final SupportMessageRepository supportMessageRepository;
@@ -183,6 +183,9 @@ public class ClientPortalService {
         String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
         String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
 
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][PARSED] event={} expectedBotId={} receivedBotId={} adminMessageId={} replyToAdminMessageId={} adminDialogId={} adminChatId={} userId={} userName={} userIsBot={} text={}",
+                event, admin.getBotId(), botId, adminMessageId, replyToAdminMessageId, adminDialogId, adminChatId, userId, userName, userIsBot, text);
+
         if (text == null || text.isBlank()) {
             portalRepository.save(client);
             return Map.of("ok", true, "processed", false, "reason", "empty_text");
@@ -266,6 +269,15 @@ public class ClientPortalService {
         String adminMessageId = firstValue(payload, "data[message][id]", "message[id]", "data.message.id");
         String replyToAdminMessageId = firstValue(
                 payload,
+                "data[message][params][REPLY_ID]",
+                "data[message][params][replyId]",
+                "data[message][params][reply_id]",
+                "message[params][REPLY_ID]",
+                "message[params][replyId]",
+                "message[params][reply_id]",
+                "data.message.params.REPLY_ID",
+                "data.message.params.replyId",
+                "data.message.params.reply_id",
                 "data[message][replyId]",
                 "data[message][reply_id]",
                 "data[message][replyMessageId]",
@@ -279,10 +291,16 @@ public class ClientPortalService {
                 "data.message.reply_id",
                 "data.message.replyMessageId",
                 "data.message.replyToMessageId",
-                "data.message.parentId"
+                "data.message.parentId",
+                "data[additionalMessages][0][id]",
+                "additionalMessages[0][id]",
+                "data.additionalMessages.0.id"
         );
         String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
         String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
+
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][PARSED] event={} expectedBotId={} receivedBotId={} adminMessageId={} replyToAdminMessageId={} adminDialogId={} adminChatId={} userId={} userName={} userIsBot={} text={}",
+                event, admin.getBotId(), botId, adminMessageId, replyToAdminMessageId, adminDialogId, adminChatId, userId, userName, userIsBot, text);
 
         if (text == null || text.isBlank()) {
             portalRepository.save(admin);
@@ -338,10 +356,13 @@ public class ClientPortalService {
         String answerText = text.trim();
 
         if (replyToAdminMessageId != null && !replyToAdminMessageId.isBlank()) {
+            TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][BY_REPLY_ID][START] replyToAdminMessageId={} text={}", replyToAdminMessageId, answerText);
             SupportMessage source = supportMessageRepository
                     .findFirstByDirectionAndAdminMessageIdOrderByIdAsc("CLIENT_TO_ADMIN", replyToAdminMessageId)
                     .orElse(null);
             if (source != null) {
+                TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][BY_REPLY_ID][FOUND] replyToAdminMessageId={} sourceMessageId={} clientId={} clientCode={} clientDialogId={}",
+                        replyToAdminMessageId, source.getId(), source.getClientInstallation().getId(), source.getClientInstallation().getClientCode(), source.getClientDialogId());
                 requireClientReplyTarget(source.getClientInstallation(), source.getClientDialogId());
                 return new AdminReplyTarget(
                         source.getClientInstallation(),
@@ -351,6 +372,7 @@ public class ClientPortalService {
                         source
                 );
             }
+            TRAFFIC_LOG.warn("[B24-ROUTE][RESOLVE_REPLY][BY_REPLY_ID][NOT_FOUND] replyToAdminMessageId={} text={}", replyToAdminMessageId, answerText);
         }
 
         Matcher matcher = CLIENT_CODE_COMMAND.matcher(answerText);
@@ -363,6 +385,7 @@ public class ClientPortalService {
 
         String clientCode = matcher.group(1).trim();
         String cleanText = matcher.group(2).trim();
+        TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][BY_CLIENT_CODE][START] clientCode={} cleanText={}", clientCode, cleanText);
         PortalInstallation client = portalRepository.findByClientCode(clientCode)
                 .filter(portal -> portal.getRole() == PortalRole.CLIENT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Клиент с кодом #" + clientCode + " не найден"));
@@ -557,6 +580,10 @@ public class ClientPortalService {
         put(result, "data[message][replyMessageId]", body.path("data").path("message").path("replyMessageId"));
         put(result, "data[message][replyToMessageId]", body.path("data").path("message").path("replyToMessageId"));
         put(result, "data[message][parentId]", body.path("data").path("message").path("parentId"));
+        put(result, "data[message][params][REPLY_ID]", body.path("data").path("message").path("params").path("REPLY_ID"));
+        put(result, "data[message][params][replyId]", body.path("data").path("message").path("params").path("replyId"));
+        put(result, "data[message][params][reply_id]", body.path("data").path("message").path("params").path("reply_id"));
+        put(result, "data[additionalMessages][0][id]", body.path("data").path("additionalMessages").path(0).path("id"));
         return result;
     }
 
