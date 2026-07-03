@@ -1,5 +1,7 @@
 package ru.abs7.b24support.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,8 @@ import java.util.regex.Pattern;
 
 @Service
 public class ClientPortalService {
+
+    private static final Logger TRAFFIC_LOG = LoggerFactory.getLogger("BITRIX_TRAFFIC");
 
     private static final String CLIENT_BOT_CODE = "smart_sales_support_client_bot";
     private static final String CLIENT_BOT_TYPE = "bot";
@@ -183,8 +187,6 @@ public class ClientPortalService {
         String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
         String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
 
-        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][PARSED] event={} expectedBotId={} receivedBotId={} adminMessageId={} replyToAdminMessageId={} adminDialogId={} adminChatId={} userId={} userName={} userIsBot={} text={}",
-                event, admin.getBotId(), botId, adminMessageId, replyToAdminMessageId, adminDialogId, adminChatId, userId, userName, userIsBot, text);
 
         if (text == null || text.isBlank()) {
             portalRepository.save(client);
@@ -591,7 +593,7 @@ public class ClientPortalService {
         if (value == null || value.isMissingNode() || value.isNull()) {
             return;
         }
-        target.put(key, value.asText());
+        target.put(key, value.asString());
     }
 
     private String firstValue(Map<String, String> payload, String... keys) {
@@ -625,7 +627,7 @@ public class ClientPortalService {
         if (value.isMissingNode() || value.isNull()) {
             return null;
         }
-        String text = value.asText(null);
+        String text = value.asString(null);
         return text == null || text.isBlank() ? null : text.trim();
     }
 
@@ -636,7 +638,7 @@ public class ClientPortalService {
             return id;
         }
         if (!result.isMissingNode() && !result.isNull()) {
-            String asText = result.asText(null);
+            String asText = result.asString(null);
             if (asText != null && !asText.isBlank()) {
                 return asText.trim();
             }
