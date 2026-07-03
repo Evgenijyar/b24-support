@@ -171,6 +171,8 @@ function renderPortalCards() {
                 <div><span>Код</span><b>${escapeHtml(portal.clientCode)}</b></div>
                 <div><span>Webhook</span><b>${portal.webhookConfigured ? 'Заполнен' : 'Не указан'}</b></div>
                 <div><span>Bot ID</span><b>${escapeHtml(portal.botId || '—')}</b></div>
+                <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
+                <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
                 <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
             </div>
 
@@ -201,6 +203,10 @@ function renderAdminPanel() {
         return;
     }
 
+    const botCreated = !!portal.botId;
+    const chatCreated = !!portal.supportDialogId;
+    const supportMembers = summary.supportMembers || 0;
+
     els.adminPortalPanel.innerHTML = `
         <article class="portal-card admin-main-card">
             <div class="portal-card-head">
@@ -215,8 +221,17 @@ function renderAdminPanel() {
             <div class="admin-steps-grid">
                 <div class="admin-step ${portal.webhookConfigured ? 'is-ok' : ''}"><b>1</b><span>Webhook URL</span><small>${portal.webhookConfigured ? 'заполнен' : 'не заполнен'}</small></div>
                 <div class="admin-step ${(summary.loadedUsers || 0) > 0 ? 'is-ok' : ''}"><b>2</b><span>Сотрудники</span><small>${summary.loadedUsers || 0} загружено</small></div>
-                <div class="admin-step ${(summary.supportMembers || 0) > 0 ? 'is-ok' : ''}"><b>3</b><span>Операторы</span><small>${summary.supportMembers || 0} выбрано</small></div>
-                <div class="admin-step"><b>4</b><span>Чат</span><small>следующий этап</small></div>
+                <div class="admin-step ${supportMembers > 0 ? 'is-ok' : ''}"><b>3</b><span>Операторы</span><small>${supportMembers} выбрано</small></div>
+                <div class="admin-step ${botCreated ? 'is-ok' : ''}"><b>4</b><span>Бот</span><small>${botCreated ? 'ID ' + escapeHtml(portal.botId) : 'не создан'}</small></div>
+                <div class="admin-step ${chatCreated ? 'is-ok' : ''}"><b>5</b><span>Админский чат</span><small>${chatCreated ? escapeHtml(portal.supportDialogId) : 'не создан'}</small></div>
+            </div>
+
+            <div class="portal-meta-grid mt-3">
+                <div><span>Bot code</span><b>${escapeHtml(portal.botCode || '—')}</b></div>
+                <div><span>Bot type</span><b>${escapeHtml(portal.botType || '—')}</b></div>
+                <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
+                <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
+                <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
             </div>
 
             ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
@@ -225,6 +240,13 @@ function renderAdminPanel() {
                 <button class="btn btn-flat" type="button" data-edit-portal="${portal.id}">Редактировать портал</button>
                 <button class="btn btn-flat" type="button" data-admin-test="${portal.id}">Проверить подключение</button>
                 <button class="btn btn-save" type="button" data-admin-load-users="${portal.id}">Загрузить сотрудников</button>
+            </div>
+
+            <div class="portal-actions admin-bot-actions">
+                <button class="btn btn-save" type="button" data-admin-register-bot="${portal.id}">Создать / проверить бота</button>
+                <button class="btn btn-save" type="button" data-admin-create-chat="${portal.id}" ${(!botCreated || supportMembers === 0) ? 'disabled' : ''}>Создать админский чат</button>
+                <button class="btn btn-flat" type="button" data-admin-add-chat-users="${portal.id}" ${(!botCreated || !chatCreated || supportMembers === 0) ? 'disabled' : ''}>Добавить операторов в чат</button>
+                <button class="btn btn-flat" type="button" data-admin-test-message="${portal.id}" ${(!botCreated || !chatCreated) ? 'disabled' : ''}>Отправить тест</button>
             </div>
         </article>
     `;
@@ -256,7 +278,7 @@ function renderAdminUsers() {
                 <div>
                     <div class="eyebrow">Операторы поддержки</div>
                     <h3>Выбери сотрудников для общего чата</h3>
-                    <p>На следующем этапе backend создаст групповой чат и добавит туда отмеченных пользователей.</p>
+                    <p>Эти сотрудники будут добавлены в общий чат «Техподдержка админ». После изменения списка нажми «Сохранить выбранных», затем «Добавить операторов в чат».</p>
                 </div>
                 <button id="btnSaveSupportUsers" class="btn btn-save" type="button" data-save-support-users="${portal.id}">Сохранить выбранных</button>
             </div>
@@ -299,6 +321,30 @@ async function handlePortalCardClick(event) {
     const loadId = event.target.closest('[data-admin-load-users]')?.dataset.adminLoadUsers;
     if (loadId) {
         await loadAdminUsers(loadId);
+        return;
+    }
+
+    const registerBotId = event.target.closest('[data-admin-register-bot]')?.dataset.adminRegisterBot;
+    if (registerBotId) {
+        await adminAction(registerBotId, 'bot/register', 'Бот создан / проверен');
+        return;
+    }
+
+    const createChatId = event.target.closest('[data-admin-create-chat]')?.dataset.adminCreateChat;
+    if (createChatId) {
+        await adminAction(createChatId, 'chat/create', 'Админский чат создан');
+        return;
+    }
+
+    const addChatUsersId = event.target.closest('[data-admin-add-chat-users]')?.dataset.adminAddChatUsers;
+    if (addChatUsersId) {
+        await adminAction(addChatUsersId, 'chat/add-users', 'Операторы добавлены в чат');
+        return;
+    }
+
+    const testMessageId = event.target.closest('[data-admin-test-message]')?.dataset.adminTestMessage;
+    if (testMessageId) {
+        await adminAction(testMessageId, 'chat/test-message', 'Тестовое сообщение отправлено');
     }
 }
 
@@ -345,6 +391,22 @@ async function loadAdminUsers(portalId) {
         showNotice(els.adminNotice, result.message || 'Сотрудники загружены', !result.success);
     } catch (error) {
         showNotice(els.adminNotice, error.message || 'Не удалось загрузить сотрудников', true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function adminAction(portalId, action, fallbackMessage) {
+    setLoading(true);
+    clearNotices();
+    try {
+        const result = await api(`/api/admin-portal/${portalId}/${action}`, { method: 'POST' });
+        await loadAll();
+        await loadAdminUsersIfPossible(true);
+        setActivePage('admin');
+        showNotice(els.adminNotice, result.message || fallbackMessage, !result.success);
+    } catch (error) {
+        showNotice(els.adminNotice, error.message || fallbackMessage || 'Операция не выполнена', true);
     } finally {
         setLoading(false);
     }

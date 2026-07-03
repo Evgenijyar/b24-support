@@ -40,6 +40,29 @@ public class BitrixRestClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
 
+        return send(request);
+    }
+
+    public JsonNode callJson(String webhookUrl, String method, Object payload) {
+        String endpoint = buildEndpoint(webhookUrl, method);
+        String body;
+        try {
+            body = objectMapper.writeValueAsString(payload == null ? Map.of() : payload);
+        } catch (Exception e) {
+            throw new BitrixRestException("Не удалось подготовить JSON-запрос к Bitrix24", e);
+        }
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+                .timeout(Duration.ofSeconds(35))
+                .header("Content-Type", "application/json; charset=UTF-8")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        return send(request);
+    }
+
+    private JsonNode send(HttpRequest request) {
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
@@ -61,6 +84,8 @@ public class BitrixRestClient {
             throw new BitrixRestException("Некорректный webhook URL Bitrix24", e);
         } catch (IOException e) {
             throw new BitrixRestException("Не удалось прочитать ответ Bitrix24", e);
+        } catch (BitrixRestException e) {
+            throw e;
         } catch (Exception e) {
             throw new BitrixRestException("Не удалось обработать JSON-ответ Bitrix24", e);
         }

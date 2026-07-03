@@ -40,8 +40,26 @@ public class PortalInstallation {
     @Column(name = "bot_id", length = 255)
     private String botId;
 
+    @Column(name = "bot_code", length = 128)
+    private String botCode;
+
+    @Column(name = "bot_token", length = 64)
+    private String botToken;
+
+    @Column(name = "bot_type", length = 32)
+    private String botType;
+
+    @Column(name = "support_chat_id", length = 64)
+    private String supportChatId;
+
     @Column(name = "support_dialog_id", length = 255)
     private String supportDialogId;
+
+    @Column(name = "bot_registered_at")
+    private OffsetDateTime botRegisteredAt;
+
+    @Column(name = "support_chat_created_at")
+    private OffsetDateTime supportChatCreatedAt;
 
     @Column(name = "last_error", columnDefinition = "text")
     private String lastError;
@@ -136,12 +154,60 @@ public class PortalInstallation {
         this.botId = botId;
     }
 
+    public String getBotCode() {
+        return botCode;
+    }
+
+    public void setBotCode(String botCode) {
+        this.botCode = botCode;
+    }
+
+    public String getBotToken() {
+        return botToken;
+    }
+
+    public void setBotToken(String botToken) {
+        this.botToken = botToken;
+    }
+
+    public String getBotType() {
+        return botType;
+    }
+
+    public void setBotType(String botType) {
+        this.botType = botType;
+    }
+
+    public String getSupportChatId() {
+        return supportChatId;
+    }
+
+    public void setSupportChatId(String supportChatId) {
+        this.supportChatId = supportChatId;
+    }
+
     public String getSupportDialogId() {
         return supportDialogId;
     }
 
     public void setSupportDialogId(String supportDialogId) {
         this.supportDialogId = supportDialogId;
+    }
+
+    public OffsetDateTime getBotRegisteredAt() {
+        return botRegisteredAt;
+    }
+
+    public void setBotRegisteredAt(OffsetDateTime botRegisteredAt) {
+        this.botRegisteredAt = botRegisteredAt;
+    }
+
+    public OffsetDateTime getSupportChatCreatedAt() {
+        return supportChatCreatedAt;
+    }
+
+    public void setSupportChatCreatedAt(OffsetDateTime supportChatCreatedAt) {
+        this.supportChatCreatedAt = supportChatCreatedAt;
     }
 
     public String getLastError() {

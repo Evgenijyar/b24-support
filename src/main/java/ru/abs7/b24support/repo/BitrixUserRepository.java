@@ -9,6 +9,8 @@ public interface BitrixUserRepository extends JpaRepository<BitrixUser, Long> {
 
     List<BitrixUser> findAllByPortalInstallationIdOrderBySupportMemberDescLastNameAscFirstNameAscIdAsc(Long portalInstallationId);
 
+    List<BitrixUser> findAllByPortalInstallationIdAndSupportMemberTrueOrderByLastNameAscFirstNameAscIdAsc(Long portalInstallationId);
+
     Optional<BitrixUser> findByPortalInstallationIdAndBitrixUserId(Long portalInstallationId, String bitrixUserId);
 
     long countByPortalInstallationId(Long portalInstallationId);

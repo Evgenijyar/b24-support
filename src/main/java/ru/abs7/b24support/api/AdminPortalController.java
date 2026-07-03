@@ -48,4 +48,24 @@ public class AdminPortalController {
                                                    @RequestBody SupportUsersRequest request) {
         return adminPortalService.saveSupportUsers(portalId, request.userIds());
     }
+
+    @PostMapping("/{portalId}/bot/register")
+    public AdminPortalActionResponse registerBot(@PathVariable Long portalId) {
+        return adminPortalService.registerBot(portalId);
+    }
+
+    @PostMapping("/{portalId}/chat/create")
+    public AdminPortalActionResponse createSupportChat(@PathVariable Long portalId) {
+        return adminPortalService.createSupportChat(portalId);
+    }
+
+    @PostMapping("/{portalId}/chat/add-users")
+    public AdminPortalActionResponse addSupportUsersToChat(@PathVariable Long portalId) {
+        return adminPortalService.addSupportUsersToChat(portalId);
+    }
+
+    @PostMapping("/{portalId}/chat/test-message")
+    public AdminPortalActionResponse sendTestMessage(@PathVariable Long portalId) {
+        return adminPortalService.sendTestMessage(portalId);
+    }
 }

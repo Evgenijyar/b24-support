@@ -1,6 +1,5 @@
 package ru.abs7.b24support.service;
 
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -20,8 +19,10 @@ import ru.abs7.b24support.domain.PortalRole;
 import ru.abs7.b24support.domain.PortalStatus;
 import ru.abs7.b24support.repo.BitrixUserRepository;
 import ru.abs7.b24support.repo.PortalInstallationRepository;
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,11 +34,15 @@ import java.util.stream.Collectors;
 public class AdminPortalService {
 
     private static final int MAX_USER_GET_PAGES = 50;
+    private static final String ADMIN_BOT_CODE = "smart_sales_support_admin_bot";
+    private static final String ADMIN_BOT_TYPE = "supervisor";
+    private static final String ADMIN_CHAT_TITLE = "Техподдержка админ";
 
     private final PortalInstallationRepository portalRepository;
     private final BitrixUserRepository bitrixUserRepository;
     private final BitrixRestClient bitrixRestClient;
     private final ObjectMapper objectMapper;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public AdminPortalService(PortalInstallationRepository portalRepository,
                               BitrixUserRepository bitrixUserRepository,
@@ -90,18 +95,10 @@ public class AdminPortalService {
             params.put("start", "0");
             bitrixRestClient.call(admin.getWebhookUrl(), "user.get", params);
 
-            admin.setStatus(PortalStatus.ACTIVE);
-            admin.setConnectedAt(OffsetDateTime.now());
-            admin.setLastError(null);
-            admin.markUpdated();
-            portalRepository.save(admin);
-
+            markSuccess(admin);
             return response(true, "Подключение к Bitrix24 работает", admin);
         } catch (BitrixRestException e) {
-            admin.setStatus(PortalStatus.ERROR);
-            admin.setLastError(e.getMessage());
-            admin.markUpdated();
-            portalRepository.save(admin);
+            markError(admin, e);
             return response(false, e.getMessage(), admin);
         }
     }
@@ -117,18 +114,10 @@ public class AdminPortalService {
                 upsertUser(admin, remoteUser);
             }
 
-            admin.setStatus(PortalStatus.ACTIVE);
-            admin.setConnectedAt(OffsetDateTime.now());
-            admin.setLastError(null);
-            admin.markUpdated();
-            portalRepository.save(admin);
-
+            markSuccess(admin);
             return response(true, "Сотрудники загружены: " + remoteUsers.size(), admin);
         } catch (BitrixRestException e) {
-            admin.setStatus(PortalStatus.ERROR);
-            admin.setLastError(e.getMessage());
-            admin.markUpdated();
-            portalRepository.save(admin);
+            markError(admin, e);
             return response(false, e.getMessage(), admin);
         }
     }
@@ -152,6 +141,147 @@ public class AdminPortalService {
         bitrixUserRepository.saveAll(users);
 
         return users(admin.getId());
+    }
+
+    @Transactional
+    public AdminPortalActionResponse registerBot(Long portalId) {
+        PortalInstallation admin = findAdminPortal(portalId);
+        requireWebhook(admin);
+
+        try {
+            String botToken = valueOrDefault(admin.getBotToken(), generateBotToken());
+            Map<String, Object> payload = Map.of(
+                    "fields", Map.of(
+                            "code", ADMIN_BOT_CODE,
+                            "botToken", botToken,
+                            "type", ADMIN_BOT_TYPE,
+                            "eventMode", "fetch",
+                            "properties", Map.of(
+                                    "name", "Техподдержка «Умные продажи»",
+                                    "workPosition", "Маршрутизатор обращений клиентов"
+                            )
+                    )
+            );
+
+            JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Bot.register", payload);
+            JsonNode bot = root.path("result").path("bot");
+            String botId = text(bot, "id");
+            if (botId == null || botId.isBlank()) {
+                throw new BitrixRestException("Bitrix24 не вернул ID зарегистрированного бота");
+            }
+
+            admin.setBotId(botId);
+            admin.setBotCode(valueOrDefault(text(bot, "code"), ADMIN_BOT_CODE));
+            admin.setBotType(valueOrDefault(text(bot, "type"), ADMIN_BOT_TYPE));
+            admin.setBotToken(botToken);
+            admin.setBotRegisteredAt(OffsetDateTime.now());
+            markSuccess(admin);
+
+            return response(true, "Бот зарегистрирован / найден: ID " + botId, admin);
+        } catch (BitrixRestException e) {
+            markError(admin, e);
+            return response(false, e.getMessage(), admin);
+        }
+    }
+
+    @Transactional
+    public AdminPortalActionResponse createSupportChat(Long portalId) {
+        PortalInstallation admin = findAdminPortal(portalId);
+        requireWebhook(admin);
+        requireBot(admin);
+
+        List<Integer> supportUserIds = supportBitrixUserIds(admin);
+        if (supportUserIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала выбери операторов поддержки");
+        }
+
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("botId", parseInteger(admin.getBotId(), "Bot ID"));
+            payload.put("botToken", admin.getBotToken());
+            payload.put("fields", Map.of(
+                    "title", ADMIN_CHAT_TITLE,
+                    "description", "Общий чат операторов поддержки для обращений из клиентских Bitrix24",
+                    "color", "mint",
+                    "userIds", supportUserIds,
+                    "message", "Чат технической поддержки создан. Следующим шагом сюда будут приходить обращения клиентов."
+            ));
+
+            JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Chat.add", payload);
+            JsonNode chat = root.path("result").path("chat");
+            String chatId = text(chat, "id");
+            String dialogId = text(chat, "dialogId");
+            if (dialogId == null || dialogId.isBlank()) {
+                throw new BitrixRestException("Bitrix24 не вернул dialogId созданного чата");
+            }
+
+            admin.setSupportChatId(chatId);
+            admin.setSupportDialogId(dialogId);
+            admin.setSupportChatCreatedAt(OffsetDateTime.now());
+            markSuccess(admin);
+
+            return response(true, "Админский чат создан: " + dialogId, admin);
+        } catch (BitrixRestException e) {
+            markError(admin, e);
+            return response(false, e.getMessage(), admin);
+        }
+    }
+
+    @Transactional
+    public AdminPortalActionResponse addSupportUsersToChat(Long portalId) {
+        PortalInstallation admin = findAdminPortal(portalId);
+        requireWebhook(admin);
+        requireBot(admin);
+        requireSupportDialog(admin);
+
+        List<Integer> supportUserIds = supportBitrixUserIds(admin);
+        if (supportUserIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала выбери операторов поддержки");
+        }
+
+        try {
+            Map<String, Object> payload = Map.of(
+                    "botId", parseInteger(admin.getBotId(), "Bot ID"),
+                    "botToken", admin.getBotToken(),
+                    "dialogId", admin.getSupportDialogId(),
+                    "userIds", supportUserIds
+            );
+
+            bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Chat.User.add", payload);
+            markSuccess(admin);
+            return response(true, "Операторы добавлены в админский чат: " + supportUserIds.size(), admin);
+        } catch (BitrixRestException e) {
+            markError(admin, e);
+            return response(false, e.getMessage(), admin);
+        }
+    }
+
+    @Transactional
+    public AdminPortalActionResponse sendTestMessage(Long portalId) {
+        PortalInstallation admin = findAdminPortal(portalId);
+        requireWebhook(admin);
+        requireBot(admin);
+        requireSupportDialog(admin);
+
+        try {
+            Map<String, Object> payload = Map.of(
+                    "botId", parseInteger(admin.getBotId(), "Bot ID"),
+                    "botToken", admin.getBotToken(),
+                    "dialogId", admin.getSupportDialogId(),
+                    "fields", Map.of(
+                            "message", "Тестовое сообщение от B24 Support. Админский чат подключён корректно.",
+                            "urlPreview", false
+                    )
+            );
+
+            JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+            String messageId = text(root.path("result"), "id");
+            markSuccess(admin);
+            return response(true, "Тестовое сообщение отправлено" + (messageId == null ? "" : ": " + messageId), admin);
+        } catch (BitrixRestException e) {
+            markError(admin, e);
+            return response(false, e.getMessage(), admin);
+        }
     }
 
     private List<JsonNode> fetchAllUsers(String webhookUrl) {
@@ -206,6 +336,16 @@ public class AdminPortalService {
         bitrixUserRepository.save(user);
     }
 
+    private List<Integer> supportBitrixUserIds(PortalInstallation admin) {
+        return bitrixUserRepository
+                .findAllByPortalInstallationIdAndSupportMemberTrueOrderByLastNameAscFirstNameAscIdAsc(admin.getId())
+                .stream()
+                .map(BitrixUser::getBitrixUserId)
+                .map(this::tryParseInteger)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     private String buildDisplayName(BitrixUser user) {
         String joined = List.of(
                         valueOrEmpty(user.getLastName()),
@@ -229,6 +369,10 @@ public class AdminPortalService {
         return value == null ? "" : value.trim();
     }
 
+    private String valueOrDefault(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
     private String text(JsonNode node, String field) {
         JsonNode value = node.path(field);
         if (value.isMissingNode() || value.isNull()) {
@@ -246,9 +390,43 @@ public class AdminPortalService {
         }
     }
 
+    private String generateBotToken() {
+        byte[] bytes = new byte[16];
+        secureRandom.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
+
+    private Integer tryParseInteger(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private Integer parseInteger(String value, String fieldName) {
+        Integer parsed = tryParseInteger(value);
+        if (parsed == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " не заполнен или некорректен");
+        }
+        return parsed;
+    }
+
     private void requireWebhook(PortalInstallation admin) {
         if (admin.getWebhookUrl() == null || admin.getWebhookUrl().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У админского портала не заполнен Webhook / REST URL");
+        }
+    }
+
+    private void requireBot(PortalInstallation admin) {
+        if (admin.getBotId() == null || admin.getBotId().isBlank() || admin.getBotToken() == null || admin.getBotToken().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала создай / проверь бота");
+        }
+    }
+
+    private void requireSupportDialog(PortalInstallation admin) {
+        if (admin.getSupportDialogId() == null || admin.getSupportDialogId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала создай админский чат");
         }
     }
 
@@ -263,6 +441,21 @@ public class AdminPortalService {
         }
 
         return portal;
+    }
+
+    private void markSuccess(PortalInstallation admin) {
+        admin.setStatus(PortalStatus.ACTIVE);
+        admin.setConnectedAt(OffsetDateTime.now());
+        admin.setLastError(null);
+        admin.markUpdated();
+        portalRepository.save(admin);
+    }
+
+    private void markError(PortalInstallation admin, BitrixRestException e) {
+        admin.setStatus(PortalStatus.ERROR);
+        admin.setLastError(e.getMessage());
+        admin.markUpdated();
+        portalRepository.save(admin);
     }
 
     private AdminPortalActionResponse response(boolean success, String message, PortalInstallation admin) {
