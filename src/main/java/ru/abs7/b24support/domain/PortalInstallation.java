@@ -55,6 +55,15 @@ public class PortalInstallation {
     @Column(name = "support_dialog_id", length = 255)
     private String supportDialogId;
 
+    @Column(name = "bot_event_webhook_url", columnDefinition = "text")
+    private String botEventWebhookUrl;
+
+    @Column(name = "last_event_at")
+    private OffsetDateTime lastEventAt;
+
+    @Column(name = "last_client_message_at")
+    private OffsetDateTime lastClientMessageAt;
+
     @Column(name = "bot_registered_at")
     private OffsetDateTime botRegisteredAt;
 
@@ -192,6 +201,30 @@ public class PortalInstallation {
 
     public void setSupportDialogId(String supportDialogId) {
         this.supportDialogId = supportDialogId;
+    }
+
+    public String getBotEventWebhookUrl() {
+        return botEventWebhookUrl;
+    }
+
+    public void setBotEventWebhookUrl(String botEventWebhookUrl) {
+        this.botEventWebhookUrl = botEventWebhookUrl;
+    }
+
+    public OffsetDateTime getLastEventAt() {
+        return lastEventAt;
+    }
+
+    public void setLastEventAt(OffsetDateTime lastEventAt) {
+        this.lastEventAt = lastEventAt;
+    }
+
+    public OffsetDateTime getLastClientMessageAt() {
+        return lastClientMessageAt;
+    }
+
+    public void setLastClientMessageAt(OffsetDateTime lastClientMessageAt) {
+        this.lastClientMessageAt = lastClientMessageAt;
     }
 
     public OffsetDateTime getBotRegisteredAt() {

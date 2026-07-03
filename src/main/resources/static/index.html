@@ -99,7 +99,7 @@
                         <div>
                             <div class="eyebrow">Подключения</div>
                             <h2 class="workspace-title">Порталы Bitrix24</h2>
-                            <div class="workspace-meta">Базовый реестр порталов. Для админского портала уже доступна проверка webhook и загрузка сотрудников.</div>
+                            <div class="workspace-meta">Реестр порталов. Для клиентских порталов теперь доступна регистрация бота и маршрут клиент → админский чат.</div>
                         </div>
                         <div class="transfer-actions"><button id="btnAddPortalTop" class="btn btn-save" type="button">Добавить портал</button></div>
                     </div>
@@ -114,7 +114,7 @@
                         <div>
                             <div class="eyebrow">Админский Bitrix24</div>
                             <h2 class="workspace-title">Общий чат поддержки</h2>
-                            <div class="workspace-meta">На этом шаге backend проверяет REST-доступ к твоему Bitrix24 и загружает сотрудников для будущего группового чата.</div>
+                            <div class="workspace-meta">Админский бот и общий чат принимают обращения из клиентских Bitrix24.</div>
                         </div>
                         <div class="transfer-actions">
                             <button id="btnAdminCreate" class="btn btn-save" type="button">Добавить админский портал</button>
@@ -128,9 +128,19 @@
             </div>
 
             <div id="messagesPage" class="dashboard-zone page-section d-none">
-                <div class="empty-state text-center">
-                    <h2 class="fw-semibold text-white mb-3">Журнал сообщений</h2>
-                    <p class="text-secondary m-0">Этот раздел подключим после регистрации ботов и первых входящих событий Bitrix24.</p>
+                <div class="project-workspace wide-workspace">
+                    <div class="workspace-heading transfer-heading">
+                        <div>
+                            <div class="eyebrow">Входящие события</div>
+                            <h2 class="workspace-title">Журнал сообщений</h2>
+                            <div class="workspace-meta">Здесь появляются сообщения, которые клиентский бот принял в клиентском Bitrix24 и переслал в общий админский чат.</div>
+                        </div>
+                        <div class="transfer-actions">
+                            <button class="btn btn-flat" type="button" data-switch-page="portals">К клиентским порталам</button>
+                        </div>
+                    </div>
+                    <div id="messagesNotice" class="bitrix-notice"></div>
+                    <div id="messagesList"></div>
                 </div>
             </div>
 
@@ -145,7 +155,7 @@
                     </div>
                     <div class="info-card text-start">
                         <p class="mb-2"><b>Public URL:</b> <span id="publicBaseUrl">—</span></p>
-                        <p class="mb-0"><b>Webhook endpoint будущего бота:</b> <span class="code-inline">/api/bitrix/events</span></p>
+                        <p class="mb-0"><b>Webhook endpoint клиентского бота:</b> <span class="code-inline">/api/bitrix/events/client/{clientCode}</span></p>
                     </div>
                 </div>
             </div>

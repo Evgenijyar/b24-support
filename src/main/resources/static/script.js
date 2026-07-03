@@ -5,6 +5,7 @@ const state = {
     bootstrap: null,
     adminSummary: null,
     adminUsers: [],
+    clientMessages: [],
     editingPortal: null
 };
 
@@ -25,6 +26,8 @@ function cacheElements() {
     els.adminNotice = document.getElementById('adminNotice');
     els.adminPortalPanel = document.getElementById('adminPortalPanel');
     els.adminUsersPanel = document.getElementById('adminUsersPanel');
+    els.messagesNotice = document.getElementById('messagesNotice');
+    els.messagesList = document.getElementById('messagesList');
     els.backendStatePill = document.getElementById('backendStatePill');
     els.metricTotal = document.getElementById('metricTotal');
     els.metricAdmin = document.getElementById('metricAdmin');
@@ -88,16 +91,18 @@ function bindEvents() {
 async function loadAll() {
     setLoading(true);
     try {
-        const [bootstrap, portals, adminSummary] = await Promise.all([
+        const [bootstrap, portals, adminSummary, messages] = await Promise.all([
             api('/api/bootstrap/status'),
             api('/api/portals'),
-            api('/api/admin-portal/summary')
+            api('/api/admin-portal/summary'),
+            api('/api/client-portals/messages')
         ]);
 
         state.bootstrap = bootstrap;
         state.portals = portals.items || [];
         state.portalStats = portals;
         state.adminSummary = adminSummary;
+        state.clientMessages = messages.items || [];
 
         renderAll();
         await loadAdminUsersIfPossible(false);
@@ -113,6 +118,7 @@ function renderAll() {
     renderPortalNav();
     renderPortalCards();
     renderAdminPanel();
+    renderMessages();
     renderSettings();
 }
 
@@ -174,6 +180,8 @@ function renderPortalCards() {
                 <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
                 <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
                 <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
+                <div><span>Event URL</span><b>${portal.botEventWebhookUrl ? 'Готов' : '—'}</b></div>
+                <div><span>Последнее событие</span><b>${formatDateTime(portal.lastEventAt) || '—'}</b></div>
             </div>
 
             ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
@@ -181,9 +189,51 @@ function renderPortalCards() {
             <div class="portal-actions">
                 <button class="btn btn-flat btn-sm" type="button" data-edit-portal="${portal.id}">Редактировать</button>
                 ${portal.role === 'ADMIN' ? `<button class="btn btn-flat btn-sm" type="button" data-admin-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-admin-load-users="${portal.id}">Загрузить сотрудников</button>` : ''}
+                ${portal.role === 'CLIENT' ? `<button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button>` : ''}
             </div>
         </article>
     `).join('');
+}
+
+function renderMessages() {
+    if (!els.messagesList) return;
+
+    if (!state.clientMessages.length) {
+        els.messagesList.innerHTML = `
+            <div class="empty-state text-center">
+                <h2 class="fw-semibold text-white mb-3">Журнал сообщений пуст</h2>
+                <p class="text-secondary m-0">После регистрации клиентского бота напиши ему в клиентском Bitrix24. Сообщение должно появиться здесь и в админском чате.</p>
+            </div>
+        `;
+        return;
+    }
+
+    els.messagesList.innerHTML = `
+        <div class="messages-list">
+            ${state.clientMessages.map(message => renderMessageCard(message)).join('')}
+        </div>
+    `;
+}
+
+function renderMessageCard(message) {
+    return `
+        <article class="message-card">
+            <div class="message-card-head">
+                <div>
+                    <div class="eyebrow">${escapeHtml(message.clientPortalTitle || 'Клиентский портал')} · #${escapeHtml(message.clientCode || '—')}</div>
+                    <h3>${escapeHtml(message.senderName || 'Клиент')}</h3>
+                    <div class="portal-domain">${formatDateTime(message.createdAt) || '—'} · клиентский диалог ${escapeHtml(message.clientDialogId || '—')}</div>
+                </div>
+                <span class="status-pill ${message.status === 'FORWARDED' ? 'active' : message.status === 'ERROR' ? 'error' : ''}">${escapeHtml(message.status || 'NEW')}</span>
+            </div>
+            <div class="message-text">${escapeHtml(message.text || '')}</div>
+            <div class="portal-meta-grid mt-3">
+                <div><span>Client msg</span><b>${escapeHtml(message.clientMessageId || '—')}</b></div>
+                <div><span>Admin msg</span><b>${escapeHtml(message.adminMessageId || '—')}</b></div>
+                <div><span>Admin dialog</span><b>${escapeHtml(message.adminDialogId || '—')}</b></div>
+            </div>
+        </article>
+    `;
 }
 
 function renderAdminPanel() {
@@ -232,6 +282,8 @@ function renderAdminPanel() {
                 <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
                 <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
                 <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
+                <div><span>Event URL</span><b>${portal.botEventWebhookUrl ? 'Готов' : '—'}</b></div>
+                <div><span>Последнее событие</span><b>${formatDateTime(portal.lastEventAt) || '—'}</b></div>
             </div>
 
             ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
@@ -324,6 +376,18 @@ async function handlePortalCardClick(event) {
         return;
     }
 
+    const clientTestId = event.target.closest('[data-client-test]')?.dataset.clientTest;
+    if (clientTestId) {
+        await clientAction(clientTestId, 'test-connection', 'Клиентский портал проверен');
+        return;
+    }
+
+    const clientRegisterBotId = event.target.closest('[data-client-register-bot]')?.dataset.clientRegisterBot;
+    if (clientRegisterBotId) {
+        await clientAction(clientRegisterBotId, 'bot/register', 'Клиентский бот создан / проверен');
+        return;
+    }
+
     const registerBotId = event.target.closest('[data-admin-register-bot]')?.dataset.adminRegisterBot;
     if (registerBotId) {
         await adminAction(registerBotId, 'bot/register', 'Бот создан / проверен');
@@ -407,6 +471,21 @@ async function adminAction(portalId, action, fallbackMessage) {
         showNotice(els.adminNotice, result.message || fallbackMessage, !result.success);
     } catch (error) {
         showNotice(els.adminNotice, error.message || fallbackMessage || 'Операция не выполнена', true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+async function clientAction(portalId, action, fallbackMessage) {
+    setLoading(true);
+    clearNotices();
+    try {
+        const result = await api(`/api/client-portals/${portalId}/${action}`, { method: 'POST' });
+        await loadAll();
+        setActivePage('portals');
+        showNotice(els.portalNotice, result.message || fallbackMessage, !result.success);
+    } catch (error) {
+        showNotice(els.portalNotice, error.message || fallbackMessage || 'Операция не выполнена', true);
     } finally {
         setLoading(false);
     }
@@ -604,6 +683,7 @@ function buildInitials(value) {
 function clearNotices() {
     showNotice(els.portalNotice, '', false);
     showNotice(els.adminNotice, '', false);
+    showNotice(els.messagesNotice, '', false);
 }
 
 function showNotice(element, message, isError) {
@@ -621,6 +701,17 @@ function showFormError(message) {
 function clearFormError() {
     els.portalFormError.textContent = '';
     els.portalFormError.classList.add('d-none');
+}
+
+function formatDateTime(value) {
+    if (!value) return '';
+    try {
+        return new Intl.DateTimeFormat('ru-RU', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        }).format(new Date(value));
+    } catch (e) {
+        return String(value);
+    }
 }
 
 function escapeHtml(value) {
