@@ -33,4 +33,9 @@ public class ClientPortalController {
     public ClientPortalActionResponse registerClientBot(@PathVariable Long portalId) {
         return clientPortalService.registerClientBot(portalId);
     }
+
+    @PostMapping("/{portalId}/routing/repair")
+    public ClientPortalActionResponse repairRouting(@PathVariable Long portalId) {
+        return clientPortalService.repairRouting(portalId);
+    }
 }

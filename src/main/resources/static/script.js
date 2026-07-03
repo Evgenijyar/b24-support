@@ -201,6 +201,7 @@ function renderPortalCards() {
                     <div class="button-row">
                         <button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить webhook</button>
                         <button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button>
+                        <button class="btn btn-flat btn-sm" type="button" data-client-repair-routing="${portal.id}" ${!portal.botId ? 'disabled' : ''}>Проверить маршрутизацию</button>
                     </div>
                 </div>` : ''}
 
@@ -220,7 +221,7 @@ function renderPortalCards() {
             <div class="portal-actions">
                 <button class="btn btn-flat btn-sm" type="button" data-edit-portal="${portal.id}">Редактировать</button>
                 ${portal.role === 'ADMIN' ? `<button class="btn btn-flat btn-sm" type="button" data-admin-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-admin-load-users="${portal.id}">Загрузить сотрудников</button>` : ''}
-                ${portal.role === 'CLIENT' ? `<button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button>` : ''}
+                ${portal.role === 'CLIENT' ? `<button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button><button class="btn btn-flat btn-sm" type="button" data-client-repair-routing="${portal.id}" ${!portal.botId ? 'disabled' : ''}>Проверить маршрутизацию</button>` : ''}
             </div>
         </article>
     `).join('');
@@ -327,6 +328,7 @@ function renderAdminPanel() {
 
             <div class="portal-actions admin-bot-actions">
                 <button class="btn btn-save" type="button" data-admin-register-bot="${portal.id}">Создать / проверить бота</button>
+                <button class="btn btn-flat" type="button" data-admin-repair-routing="${portal.id}" ${!botCreated ? 'disabled' : ''}>Проверить маршрутизацию</button>
                 <button class="btn btn-save" type="button" data-admin-create-chat="${portal.id}" ${(!botCreated || supportMembers === 0) ? 'disabled' : ''}>Создать админский чат</button>
                 <button class="btn btn-flat" type="button" data-admin-add-chat-users="${portal.id}" ${(!botCreated || !chatCreated || supportMembers === 0) ? 'disabled' : ''}>Добавить операторов в чат</button>
                 <button class="btn btn-flat" type="button" data-admin-test-message="${portal.id}" ${(!botCreated || !chatCreated) ? 'disabled' : ''}>Отправить тест</button>
@@ -419,9 +421,21 @@ async function handlePortalCardClick(event) {
         return;
     }
 
+    const clientRepairRoutingId = event.target.closest('[data-client-repair-routing]')?.dataset.clientRepairRouting;
+    if (clientRepairRoutingId) {
+        await clientAction(clientRepairRoutingId, 'routing/repair', 'Маршрутизация клиентского бота проверена');
+        return;
+    }
+
     const registerBotId = event.target.closest('[data-admin-register-bot]')?.dataset.adminRegisterBot;
     if (registerBotId) {
         await adminAction(registerBotId, 'bot/register', 'Бот создан / проверен');
+        return;
+    }
+
+    const repairRoutingId = event.target.closest('[data-admin-repair-routing]')?.dataset.adminRepairRouting;
+    if (repairRoutingId) {
+        await adminAction(repairRoutingId, 'routing/repair', 'Маршрутизация админского бота проверена');
         return;
     }
 

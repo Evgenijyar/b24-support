@@ -156,6 +156,13 @@ public class AdminPortalService {
             String botToken = valueOrDefault(admin.getBotToken(), generateBotToken());
             String webhookUrl = buildAdminEventWebhookUrl();
 
+            if (admin.getBotId() != null && !admin.getBotId().isBlank()) {
+                admin.setBotToken(botToken);
+                configureExistingAdminBotWebhook(admin, webhookUrl);
+                markSuccess(admin);
+                return response(true, "Админский бот уже есть, маршрутизация webhook обновлена: ID " + admin.getBotId(), admin);
+            }
+
             Map<String, Object> fields = new LinkedHashMap<>();
             fields.put("code", ADMIN_BOT_CODE);
             fields.put("botToken", botToken);
@@ -178,13 +185,27 @@ public class AdminPortalService {
             admin.setBotCode(valueOrDefault(text(bot, "code"), ADMIN_BOT_CODE));
             admin.setBotType(valueOrDefault(text(bot, "type"), ADMIN_BOT_TYPE));
             admin.setBotToken(botToken);
-            admin.setBotEventWebhookUrl(webhookUrl);
-            admin.setBotRegisteredAt(OffsetDateTime.now());
-
-            updateAdminBotWebhook(admin, webhookUrl);
+            configureExistingAdminBotWebhook(admin, webhookUrl);
             markSuccess(admin);
 
-            return response(true, "Админский бот создан / обновлён: ID " + botId, admin);
+            return response(true, "Админский бот создан, webhook-маршрутизация включена: ID " + botId, admin);
+        } catch (BitrixRestException e) {
+            markError(admin, e);
+            return response(false, e.getMessage(), admin);
+        }
+    }
+
+    @Transactional
+    public AdminPortalActionResponse repairRouting(Long portalId) {
+        PortalInstallation admin = findAdminPortal(portalId);
+        requireWebhook(admin);
+        requireBot(admin);
+
+        try {
+            String webhookUrl = buildAdminEventWebhookUrl();
+            configureExistingAdminBotWebhook(admin, webhookUrl);
+            markSuccess(admin);
+            return response(true, "Маршрутизация админского бота проверена и зафиксирована: " + webhookUrl, admin);
         } catch (BitrixRestException e) {
             markError(admin, e);
             return response(false, e.getMessage(), admin);
@@ -196,6 +217,7 @@ public class AdminPortalService {
         PortalInstallation admin = findAdminPortal(portalId);
         requireWebhook(admin);
         requireBot(admin);
+        ensureStoredAdminBotWebhook(admin);
 
         List<Integer> supportUserIds = supportBitrixUserIds(admin);
         if (supportUserIds.isEmpty()) {
@@ -240,6 +262,7 @@ public class AdminPortalService {
         requireWebhook(admin);
         requireBot(admin);
         requireSupportDialog(admin);
+        ensureStoredAdminBotWebhook(admin);
 
         List<Integer> supportUserIds = supportBitrixUserIds(admin);
         if (supportUserIds.isEmpty()) {
@@ -269,6 +292,7 @@ public class AdminPortalService {
         requireWebhook(admin);
         requireBot(admin);
         requireSupportDialog(admin);
+        ensureStoredAdminBotWebhook(admin);
 
         try {
             Map<String, Object> payload = Map.of(
@@ -289,6 +313,24 @@ public class AdminPortalService {
             markError(admin, e);
             return response(false, e.getMessage(), admin);
         }
+    }
+
+    private void ensureStoredAdminBotWebhook(PortalInstallation admin) {
+        String webhookUrl = buildAdminEventWebhookUrl();
+        if (webhookUrl.equals(admin.getBotEventWebhookUrl()) && ADMIN_BOT_TYPE.equals(admin.getBotType())) {
+            return;
+        }
+        configureExistingAdminBotWebhook(admin, webhookUrl);
+        portalRepository.save(admin);
+    }
+
+    private void configureExistingAdminBotWebhook(PortalInstallation admin, String webhookUrl) {
+        updateAdminBotWebhook(admin, webhookUrl);
+        admin.setBotCode(valueOrDefault(admin.getBotCode(), ADMIN_BOT_CODE));
+        admin.setBotType(ADMIN_BOT_TYPE);
+        admin.setBotEventWebhookUrl(webhookUrl);
+        admin.setBotRegisteredAt(OffsetDateTime.now());
+        admin.markUpdated();
     }
 
     private void updateAdminBotWebhook(PortalInstallation admin, String webhookUrl) {

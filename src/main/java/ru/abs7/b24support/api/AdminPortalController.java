@@ -54,6 +54,11 @@ public class AdminPortalController {
         return adminPortalService.registerBot(portalId);
     }
 
+    @PostMapping("/{portalId}/routing/repair")
+    public AdminPortalActionResponse repairRouting(@PathVariable Long portalId) {
+        return adminPortalService.repairRouting(portalId);
+    }
+
     @PostMapping("/{portalId}/chat/create")
     public AdminPortalActionResponse createSupportChat(@PathVariable Long portalId) {
         return adminPortalService.createSupportChat(portalId);
