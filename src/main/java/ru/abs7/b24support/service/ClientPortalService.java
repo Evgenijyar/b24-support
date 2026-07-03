@@ -26,6 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ClientPortalService {
@@ -33,6 +35,7 @@ public class ClientPortalService {
     private static final String CLIENT_BOT_CODE = "smart_sales_support_client_bot";
     private static final String CLIENT_BOT_TYPE = "bot";
     private static final String CLIENT_BOT_NAME = "Техподдержка «Умные продажи»";
+    private static final Pattern CLIENT_CODE_COMMAND = Pattern.compile("^\\s*#([A-Za-z0-9_-]+)\\s+(.+)$", Pattern.DOTALL);
 
     private final PortalInstallationRepository portalRepository;
     private final SupportMessageRepository supportMessageRepository;
@@ -205,6 +208,193 @@ public class ClientPortalService {
         return handleClientWebhook(clientCode, flattenJsonEvent(body));
     }
 
+    @Transactional
+    public Map<String, Object> handleAdminWebhook(Map<String, String> payload) {
+        PortalInstallation admin = findReadyAdminPortal();
+        OffsetDateTime now = OffsetDateTime.now();
+        admin.setLastEventAt(now);
+        admin.markUpdated();
+
+        String event = value(payload, "event");
+        if (!"ONIMBOTV2MESSAGEADD".equalsIgnoreCase(event)) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "event", valueOrDefault(event, "unknown"));
+        }
+
+        String botId = firstValue(payload, "data[bot][id]", "bot[id]", "data.bot.id");
+        if (admin.getBotId() != null && botId != null && !Objects.equals(admin.getBotId(), botId)) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "reason", "bot_id_mismatch");
+        }
+
+        String userIsBot = firstValue(payload, "data[user][bot]", "user[bot]", "data.user.bot");
+        if (isTruthy(userIsBot)) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "reason", "bot_author");
+        }
+
+        String adminDialogId = firstValue(payload, "data[chat][dialogId]", "chat[dialogId]", "data.chat.dialogId");
+        String adminChatId = firstValue(payload, "data[message][chatId]", "message[chatId]", "data.message.chatId", "data[chat][id]", "chat[id]", "data.chat.id");
+        if (!supportChatMatches(admin, adminDialogId, adminChatId)) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "reason", "not_support_chat");
+        }
+
+        String text = firstValue(payload, "data[message][text]", "message[text]", "data.message.text");
+        String adminMessageId = firstValue(payload, "data[message][id]", "message[id]", "data.message.id");
+        String replyToAdminMessageId = firstValue(
+                payload,
+                "data[message][replyId]",
+                "data[message][reply_id]",
+                "data[message][replyMessageId]",
+                "data[message][replyToMessageId]",
+                "data[message][parentId]",
+                "message[replyId]",
+                "message[reply_id]",
+                "message[replyMessageId]",
+                "message[parentId]",
+                "data.message.replyId",
+                "data.message.reply_id",
+                "data.message.replyMessageId",
+                "data.message.replyToMessageId",
+                "data.message.parentId"
+        );
+        String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
+        String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
+
+        if (text == null || text.isBlank()) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "reason", "empty_text");
+        }
+
+        if (adminMessageId != null && supportMessageRepository
+                .findFirstByDirectionAndAdminMessageIdOrderByIdAsc("ADMIN_TO_CLIENT", adminMessageId)
+                .isPresent()) {
+            portalRepository.save(admin);
+            return Map.of("ok", true, "processed", false, "reason", "duplicate_admin_message");
+        }
+
+        try {
+            AdminReplyTarget target = resolveAdminReplyTarget(replyToAdminMessageId, text);
+            String clientMessageId = sendReplyToClient(target.client(), target.clientDialogId(), target.text());
+
+            SupportMessage answer = new SupportMessage(target.client());
+            answer.setDirection("ADMIN_TO_CLIENT");
+            answer.setClientDialogId(target.clientDialogId());
+            answer.setClientMessageId(clientMessageId);
+            answer.setAdminDialogId(valueOrDefault(adminDialogId, admin.getSupportDialogId()));
+            answer.setAdminMessageId(adminMessageId);
+            answer.setReplyToAdminMessageId(target.replyToAdminMessageId());
+            answer.setSenderUserId(userId);
+            answer.setSenderName(valueOrDefault(userName, "Оператор " + valueOrDefault(userId, "?")));
+            answer.setText(target.text());
+            answer.setRawEventJson(toJson(payload));
+            answer.setStatus("SENT");
+            supportMessageRepository.save(answer);
+
+            if (target.sourceMessage() != null) {
+                target.sourceMessage().setStatus("ANSWERED");
+                supportMessageRepository.save(target.sourceMessage());
+            }
+
+            markSuccess(admin);
+            markSuccess(target.client());
+            return Map.of("ok", true, "processed", true, "status", "SENT", "messageId", answer.getId());
+        } catch (BitrixRestException | ResponseStatusException e) {
+            String errorMessage = valueOrDefault(e.getMessage(), "Не удалось отправить ответ клиенту");
+            markError(admin, errorMessage);
+            return Map.of("ok", true, "processed", false, "status", "ERROR", "message", errorMessage);
+        }
+    }
+
+    @Transactional
+    public Map<String, Object> handleAdminWebhookJson(JsonNode body) {
+        return handleAdminWebhook(flattenJsonEvent(body));
+    }
+
+    private AdminReplyTarget resolveAdminReplyTarget(String replyToAdminMessageId, String text) {
+        String answerText = text.trim();
+
+        if (replyToAdminMessageId != null && !replyToAdminMessageId.isBlank()) {
+            SupportMessage source = supportMessageRepository
+                    .findFirstByDirectionAndAdminMessageIdOrderByIdAsc("CLIENT_TO_ADMIN", replyToAdminMessageId)
+                    .orElse(null);
+            if (source != null) {
+                requireClientReplyTarget(source.getClientInstallation(), source.getClientDialogId());
+                return new AdminReplyTarget(
+                        source.getClientInstallation(),
+                        source.getClientDialogId(),
+                        replyToAdminMessageId,
+                        answerText,
+                        source
+                );
+            }
+        }
+
+        Matcher matcher = CLIENT_CODE_COMMAND.matcher(answerText);
+        if (!matcher.matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Не найдено исходное обращение. Ответь reply на сообщение клиента или напиши #код_клиента текст ответа"
+            );
+        }
+
+        String clientCode = matcher.group(1).trim();
+        String cleanText = matcher.group(2).trim();
+        PortalInstallation client = portalRepository.findByClientCode(clientCode)
+                .filter(portal -> portal.getRole() == PortalRole.CLIENT)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Клиент с кодом #" + clientCode + " не найден"));
+        SupportMessage latest = supportMessageRepository
+                .findFirstByClientInstallation_IdAndClientDialogIdIsNotNullOrderByCreatedAtDesc(client.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "У клиента #" + clientCode + " ещё нет активного диалога"));
+
+        requireClientReplyTarget(client, latest.getClientDialogId());
+        return new AdminReplyTarget(client, latest.getClientDialogId(), null, cleanText, latest);
+    }
+
+    private String sendReplyToClient(PortalInstallation client, String clientDialogId, String text) {
+        requireClientReplyTarget(client, clientDialogId);
+
+        String message = "[B]Ответ техподдержки «Умные продажи»:[/B]\n" + text;
+        Map<String, Object> payload = Map.of(
+                "botId", parseInteger(client.getBotId(), "Client Bot ID"),
+                "botToken", client.getBotToken(),
+                "dialogId", clientDialogId,
+                "fields", Map.of(
+                        "message", message,
+                        "urlPreview", false
+                )
+        );
+
+        JsonNode root = bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+        return extractMessageId(root);
+    }
+
+    private void requireClientReplyTarget(PortalInstallation client, String clientDialogId) {
+        if (client == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Клиентский портал для ответа не найден");
+        }
+        if (client.getWebhookUrl() == null || client.getWebhookUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У клиентского портала не заполнен webhook");
+        }
+        if (client.getBotId() == null || client.getBotToken() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У клиентского портала не создан бот");
+        }
+        if (clientDialogId == null || clientDialogId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не найден dialogId клиентского диалога");
+        }
+    }
+
+    private boolean supportChatMatches(PortalInstallation admin, String dialogId, String chatId) {
+        if (dialogId != null && !dialogId.isBlank()) {
+            return Objects.equals(admin.getSupportDialogId(), dialogId);
+        }
+        if (chatId != null && !chatId.isBlank() && admin.getSupportChatId() != null && !admin.getSupportChatId().isBlank()) {
+            return Objects.equals(admin.getSupportChatId(), chatId);
+        }
+        return true;
+    }
+
     private void updateClientBotWebhook(PortalInstallation client, String webhookUrl) {
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("eventMode", "webhook");
@@ -232,7 +422,8 @@ public class ClientPortalService {
                 + "Диалог клиента: " + valueOrDefault(message.getClientDialogId(), "?") + "\n\n"
                 + "[B]Сообщение:[/B]\n"
                 + message.getText() + "\n\n"
-                + "[SIZE=11]Ответ клиенту через reply подключим следующим шагом. Сейчас это проверка маршрута клиент → админский чат.[/SIZE]";
+                + "[SIZE=11]Чтобы ответить клиенту, нажми reply на это сообщение и напиши ответ. "
+                + "Запасной вариант: #" + client.getClientCode() + " текст ответа[/SIZE]";
 
         Map<String, Object> payload = Map.of(
                 "botId", parseInteger(admin.getBotId(), "Admin Bot ID"),
@@ -324,6 +515,11 @@ public class ClientPortalService {
         put(result, "data[user][id]", body.path("data").path("user").path("id"));
         put(result, "data[user][name]", body.path("data").path("user").path("name"));
         put(result, "data[user][bot]", body.path("data").path("user").path("bot"));
+        put(result, "data[message][replyId]", body.path("data").path("message").path("replyId"));
+        put(result, "data[message][reply_id]", body.path("data").path("message").path("reply_id"));
+        put(result, "data[message][replyMessageId]", body.path("data").path("message").path("replyMessageId"));
+        put(result, "data[message][replyToMessageId]", body.path("data").path("message").path("replyToMessageId"));
+        put(result, "data[message][parentId]", body.path("data").path("message").path("parentId"));
         return result;
     }
 
@@ -427,5 +623,14 @@ public class ClientPortalService {
 
     private ClientPortalActionResponse response(boolean success, String message, PortalInstallation portal) {
         return new ClientPortalActionResponse(success, message, PortalInstallationResponse.from(portal));
+    }
+
+    private record AdminReplyTarget(
+            PortalInstallation client,
+            String clientDialogId,
+            String replyToAdminMessageId,
+            String text,
+            SupportMessage sourceMessage
+    ) {
     }
 }

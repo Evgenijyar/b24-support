@@ -11,4 +11,10 @@ public interface SupportMessageRepository extends JpaRepository<SupportMessage, 
 
     Optional<SupportMessage> findFirstByClientInstallation_IdAndClientMessageIdOrderByIdAsc(Long clientInstallationId,
                                                                                            String clientMessageId);
+
+    Optional<SupportMessage> findFirstByDirectionAndAdminMessageIdOrderByIdAsc(String direction,
+                                                                               String adminMessageId);
+
+    Optional<SupportMessage> findFirstByClientInstallation_IdAndClientDialogIdIsNotNullOrderByCreatedAtDesc(Long clientInstallationId);
 }
+

@@ -23,6 +23,26 @@ public class BitrixEventController {
         this.clientPortalService = clientPortalService;
     }
 
+    @PostMapping(value = "/admin", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public Map<String, Object> adminEventForm(@RequestParam MultiValueMap<String, String> form) {
+        try {
+            Map<String, String> payload = new LinkedHashMap<>();
+            form.forEach((key, values) -> payload.put(key, values == null || values.isEmpty() ? null : values.get(0)));
+            return clientPortalService.handleAdminWebhook(payload);
+        } catch (RuntimeException e) {
+            return Map.of("ok", true, "processed", false, "error", e.getMessage() == null ? "internal_error" : e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/admin", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> adminEventJson(@RequestBody JsonNode body) {
+        try {
+            return clientPortalService.handleAdminWebhookJson(body);
+        } catch (RuntimeException e) {
+            return Map.of("ok", true, "processed", false, "error", e.getMessage() == null ? "internal_error" : e.getMessage());
+        }
+    }
+
     @PostMapping(value = "/client/{clientCode}", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
     public Map<String, Object> clientEventForm(@PathVariable String clientCode,
                                                @RequestParam MultiValueMap<String, String> form) {

@@ -2,6 +2,7 @@ package ru.abs7.b24support.service;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,16 +43,19 @@ public class AdminPortalService {
     private final BitrixUserRepository bitrixUserRepository;
     private final BitrixRestClient bitrixRestClient;
     private final ObjectMapper objectMapper;
+    private final String publicBaseUrl;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public AdminPortalService(PortalInstallationRepository portalRepository,
                               BitrixUserRepository bitrixUserRepository,
                               BitrixRestClient bitrixRestClient,
-                              ObjectMapper objectMapper) {
+                              ObjectMapper objectMapper,
+                              @Value("${app.public-base-url}") String publicBaseUrl) {
         this.portalRepository = portalRepository;
         this.bitrixUserRepository = bitrixUserRepository;
         this.bitrixRestClient = bitrixRestClient;
         this.objectMapper = objectMapper;
+        this.publicBaseUrl = publicBaseUrl;
     }
 
     @Transactional(readOnly = true)
@@ -150,20 +154,20 @@ public class AdminPortalService {
 
         try {
             String botToken = valueOrDefault(admin.getBotToken(), generateBotToken());
-            Map<String, Object> payload = Map.of(
-                    "fields", Map.of(
-                            "code", ADMIN_BOT_CODE,
-                            "botToken", botToken,
-                            "type", ADMIN_BOT_TYPE,
-                            "eventMode", "fetch",
-                            "properties", Map.of(
-                                    "name", "Техподдержка «Умные продажи»",
-                                    "workPosition", "Маршрутизатор обращений клиентов"
-                            )
-                    )
-            );
+            String webhookUrl = buildAdminEventWebhookUrl();
 
-            JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Bot.register", payload);
+            Map<String, Object> fields = new LinkedHashMap<>();
+            fields.put("code", ADMIN_BOT_CODE);
+            fields.put("botToken", botToken);
+            fields.put("type", ADMIN_BOT_TYPE);
+            fields.put("eventMode", "webhook");
+            fields.put("webhookUrl", webhookUrl);
+            fields.put("properties", Map.of(
+                    "name", "Техподдержка «Умные продажи»",
+                    "workPosition", "Маршрутизатор обращений клиентов"
+            ));
+
+            JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Bot.register", Map.of("fields", fields));
             JsonNode bot = root.path("result").path("bot");
             String botId = text(bot, "id");
             if (botId == null || botId.isBlank()) {
@@ -174,10 +178,13 @@ public class AdminPortalService {
             admin.setBotCode(valueOrDefault(text(bot, "code"), ADMIN_BOT_CODE));
             admin.setBotType(valueOrDefault(text(bot, "type"), ADMIN_BOT_TYPE));
             admin.setBotToken(botToken);
+            admin.setBotEventWebhookUrl(webhookUrl);
             admin.setBotRegisteredAt(OffsetDateTime.now());
+
+            updateAdminBotWebhook(admin, webhookUrl);
             markSuccess(admin);
 
-            return response(true, "Бот зарегистрирован / найден: ID " + botId, admin);
+            return response(true, "Админский бот создан / обновлён: ID " + botId, admin);
         } catch (BitrixRestException e) {
             markError(admin, e);
             return response(false, e.getMessage(), admin);
@@ -282,6 +289,35 @@ public class AdminPortalService {
             markError(admin, e);
             return response(false, e.getMessage(), admin);
         }
+    }
+
+    private void updateAdminBotWebhook(PortalInstallation admin, String webhookUrl) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("eventMode", "webhook");
+        fields.put("webhookUrl", webhookUrl);
+        fields.put("type", ADMIN_BOT_TYPE);
+        fields.put("properties", Map.of(
+                "name", "Техподдержка «Умные продажи»",
+                "workPosition", "Маршрутизатор обращений клиентов"
+        ));
+
+        Map<String, Object> payload = Map.of(
+                "botId", parseInteger(admin.getBotId(), "Bot ID"),
+                "botToken", admin.getBotToken(),
+                "fields", fields
+        );
+        bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Bot.update", payload);
+    }
+
+    private String buildAdminEventWebhookUrl() {
+        String base = publicBaseUrl == null ? "" : publicBaseUrl.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        if (base.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "app.public-base-url не настроен");
+        }
+        return base + "/api/bitrix/events/admin";
     }
 
     private List<JsonNode> fetchAllUsers(String webhookUrl) {
