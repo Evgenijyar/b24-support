@@ -1,5 +1,7 @@
 package ru.abs7.b24support.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,8 @@ import java.util.regex.Pattern;
 
 @Service
 public class ClientPortalService {
+
+    private static final Logger TRAFFIC_LOG = LoggerFactory.getLogger("BITRIX_TRAFFIC");
 
     private static final String CLIENT_BOT_CODE = "smart_sales_support_client_bot";
     private static final String CLIENT_BOT_TYPE = "bot";
@@ -69,12 +73,15 @@ public class ClientPortalService {
     public ClientPortalActionResponse testConnection(Long portalId) {
         PortalInstallation client = findClientPortal(portalId);
         requireWebhook(client);
+        TRAFFIC_LOG.info("[B24-CLIENT-ACTION][TEST_CONNECTION][START] portal={}", portalInfo(client));
 
         try {
             bitrixRestClient.call(client.getWebhookUrl(), "user.get", Map.of("start", "0"));
             markSuccess(client);
+            TRAFFIC_LOG.info("[B24-CLIENT-ACTION][TEST_CONNECTION][OK] portal={}", portalInfo(client));
             return response(true, "Клиентский Bitrix24 подключён", client);
         } catch (BitrixRestException e) {
+            TRAFFIC_LOG.error("[B24-CLIENT-ACTION][TEST_CONNECTION][ERROR] portal={} error={}", portalInfo(client), e.getMessage(), e);
             markError(client, e.getMessage());
             return response(false, e.getMessage(), client);
         }
@@ -84,10 +91,13 @@ public class ClientPortalService {
     public ClientPortalActionResponse registerClientBot(Long portalId) {
         PortalInstallation client = findClientPortal(portalId);
         requireWebhook(client);
+        TRAFFIC_LOG.info("[B24-CLIENT-ACTION][REGISTER_BOT][START] portal={}", portalInfo(client));
 
         try {
             String botToken = valueOrDefault(client.getBotToken(), generateBotToken());
             String webhookUrl = buildClientEventWebhookUrl(client);
+            TRAFFIC_LOG.info("[B24-CLIENT-ACTION][REGISTER_BOT][FIELDS] portal={} botCode={} botType={} eventMode=webhook webhookUrl={}",
+                    portalInfo(client), CLIENT_BOT_CODE, CLIENT_BOT_TYPE, webhookUrl);
             Map<String, Object> properties = Map.of(
                     "name", CLIENT_BOT_NAME,
                     "workPosition", "Помощник технической поддержки"
@@ -118,9 +128,12 @@ public class ClientPortalService {
 
             updateClientBotWebhook(client, webhookUrl);
             markSuccess(client);
+            TRAFFIC_LOG.info("[B24-CLIENT-ACTION][REGISTER_BOT][OK] portal={} botId={} botCode={} botType={} eventWebhookUrl={}",
+                    portalInfo(client), client.getBotId(), client.getBotCode(), client.getBotType(), client.getBotEventWebhookUrl());
 
             return response(true, "Клиентский бот создан / проверен: ID " + botId, client);
         } catch (BitrixRestException e) {
+            TRAFFIC_LOG.error("[B24-CLIENT-ACTION][REGISTER_BOT][ERROR] portal={} error={}", portalInfo(client), e.getMessage(), e);
             markError(client, e.getMessage());
             return response(false, e.getMessage(), client);
         }
@@ -128,9 +141,11 @@ public class ClientPortalService {
 
     @Transactional
     public Map<String, Object> handleClientWebhook(String clientCode, Map<String, String> payload) {
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][START] clientCode={} rawPayload={}", clientCode, toJson(maskPayload(payload)));
         PortalInstallation client = portalRepository.findByClientCode(clientCode)
                 .filter(portal -> portal.getRole() == PortalRole.CLIENT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Клиентский портал не найден"));
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][PORTAL] clientCode={} portal={}", clientCode, portalInfo(client));
 
         OffsetDateTime now = OffsetDateTime.now();
         client.setLastEventAt(now);
@@ -139,19 +154,26 @@ public class ClientPortalService {
         String event = value(payload, "event");
         if (!"ONIMBOTV2MESSAGEADD".equalsIgnoreCase(event)) {
             portalRepository.save(client);
-            return Map.of("ok", true, "processed", false, "event", valueOrDefault(event, "unknown"));
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "event", valueOrDefault(event, "unknown"));
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][SKIP] reason=event_mismatch clientCode={} event={} result={}", clientCode, event, result);
+            return result;
         }
 
         String botId = firstValue(payload, "data[bot][id]", "bot[id]", "data.bot.id");
         if (client.getBotId() != null && botId != null && !Objects.equals(client.getBotId(), botId)) {
             portalRepository.save(client);
-            return Map.of("ok", true, "processed", false, "reason", "bot_id_mismatch");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "bot_id_mismatch");
+            TRAFFIC_LOG.warn("[B24-ROUTE][CLIENT_IN][SKIP] reason=bot_id_mismatch clientCode={} expectedBotId={} receivedBotId={} result={}",
+                    clientCode, client.getBotId(), botId, result);
+            return result;
         }
 
         String userIsBot = firstValue(payload, "data[user][bot]", "user[bot]", "data.user.bot");
         if (isTruthy(userIsBot)) {
             portalRepository.save(client);
-            return Map.of("ok", true, "processed", false, "reason", "bot_author");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "bot_author");
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][SKIP] reason=bot_author clientCode={} userIsBot={} result={}", clientCode, userIsBot, result);
+            return result;
         }
 
         String text = firstValue(payload, "data[message][text]", "message[text]", "data.message.text");
@@ -161,16 +183,24 @@ public class ClientPortalService {
         String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
         String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
 
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][PARSED] clientCode={} event={} expectedBotId={} receivedBotId={} messageId={} dialogId={} chatId={} userId={} userName={} userIsBot={} text={}",
+                clientCode, event, client.getBotId(), botId, messageId, dialogId, chatId, userId, userName, userIsBot, text);
+
         if (text == null || text.isBlank()) {
             portalRepository.save(client);
-            return Map.of("ok", true, "processed", false, "reason", "empty_text");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "empty_text");
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][SKIP] reason=empty_text clientCode={} messageId={} result={}", clientCode, messageId, result);
+            return result;
         }
 
         if (messageId != null && supportMessageRepository
                 .findFirstByClientInstallation_IdAndClientMessageIdOrderByIdAsc(client.getId(), messageId)
                 .isPresent()) {
             portalRepository.save(client);
-            return Map.of("ok", true, "processed", false, "reason", "duplicate_message");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "duplicate_message");
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][SKIP] reason=duplicate_message clientCode={} clientInstallationId={} clientMessageId={} result={}",
+                    clientCode, client.getId(), messageId, result);
+            return result;
         }
 
         SupportMessage message = new SupportMessage(client);
@@ -182,9 +212,13 @@ public class ClientPortalService {
         message.setRawEventJson(toJson(payload));
         message.setStatus("RECEIVED");
         supportMessageRepository.save(message);
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_IN][SAVED] supportMessageId={} direction={} clientPortal={} clientDialogId={} clientMessageId={} senderUserId={} senderName={}",
+                message.getId(), message.getDirection(), portalInfo(client), message.getClientDialogId(), message.getClientMessageId(), message.getSenderUserId(), message.getSenderName());
 
         try {
             PortalInstallation admin = findReadyAdminPortal();
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_TO_ADMIN][FORWARD_START] supportMessageId={} clientPortal={} adminPortal={} adminDialogId={} adminChatId={}",
+                    message.getId(), portalInfo(client), portalInfo(admin), admin.getSupportDialogId(), admin.getSupportChatId());
             String adminMessageId = forwardToAdminChat(admin, client, message);
             message.setAdminDialogId(admin.getSupportDialogId());
             message.setAdminMessageId(adminMessageId);
@@ -193,13 +227,19 @@ public class ClientPortalService {
             client.setLastClientMessageAt(now);
             markSuccess(client);
             sendClientAcknowledgement(client, dialogId);
-            return Map.of("ok", true, "processed", true, "status", "FORWARDED", "messageId", message.getId());
+            Map<String, Object> result = Map.of("ok", true, "processed", true, "status", "FORWARDED", "messageId", message.getId());
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_TO_ADMIN][FORWARD_OK] supportMessageId={} adminMessageId={} adminDialogId={} clientDialogId={} result={}",
+                    message.getId(), adminMessageId, message.getAdminDialogId(), message.getClientDialogId(), result);
+            return result;
         } catch (BitrixRestException | ResponseStatusException e) {
             String errorMessage = valueOrDefault(e.getMessage(), "Не удалось переслать сообщение в админский чат");
             message.setStatus("ERROR");
             supportMessageRepository.save(message);
             markError(client, errorMessage);
-            return Map.of("ok", true, "processed", false, "status", "ERROR", "message", errorMessage);
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "status", "ERROR", "message", errorMessage);
+            TRAFFIC_LOG.error("[B24-ROUTE][CLIENT_TO_ADMIN][FORWARD_ERROR] supportMessageId={} clientPortal={} error={} result={}",
+                    message.getId(), portalInfo(client), errorMessage, result, e);
+            return result;
         }
     }
 
@@ -210,7 +250,9 @@ public class ClientPortalService {
 
     @Transactional
     public Map<String, Object> handleAdminWebhook(Map<String, String> payload) {
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][START] rawPayload={}", toJson(maskPayload(payload)));
         PortalInstallation admin = findReadyAdminPortal();
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][PORTAL] adminPortal={}", portalInfo(admin));
         OffsetDateTime now = OffsetDateTime.now();
         admin.setLastEventAt(now);
         admin.markUpdated();
@@ -218,26 +260,36 @@ public class ClientPortalService {
         String event = value(payload, "event");
         if (!"ONIMBOTV2MESSAGEADD".equalsIgnoreCase(event)) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "event", valueOrDefault(event, "unknown"));
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "event", valueOrDefault(event, "unknown"));
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][SKIP] reason=event_mismatch event={} result={}", event, result);
+            return result;
         }
 
         String botId = firstValue(payload, "data[bot][id]", "bot[id]", "data.bot.id");
         if (admin.getBotId() != null && botId != null && !Objects.equals(admin.getBotId(), botId)) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "reason", "bot_id_mismatch");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "bot_id_mismatch");
+            TRAFFIC_LOG.warn("[B24-ROUTE][ADMIN_IN][SKIP] reason=bot_id_mismatch expectedBotId={} receivedBotId={} result={}",
+                    admin.getBotId(), botId, result);
+            return result;
         }
 
         String userIsBot = firstValue(payload, "data[user][bot]", "user[bot]", "data.user.bot");
         if (isTruthy(userIsBot)) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "reason", "bot_author");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "bot_author");
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][SKIP] reason=bot_author userIsBot={} result={}", userIsBot, result);
+            return result;
         }
 
         String adminDialogId = firstValue(payload, "data[chat][dialogId]", "chat[dialogId]", "data.chat.dialogId");
         String adminChatId = firstValue(payload, "data[message][chatId]", "message[chatId]", "data.message.chatId", "data[chat][id]", "chat[id]", "data.chat.id");
         if (!supportChatMatches(admin, adminDialogId, adminChatId)) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "reason", "not_support_chat");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "not_support_chat");
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][SKIP] reason=not_support_chat receivedDialogId={} receivedChatId={} expectedDialogId={} expectedChatId={} result={}",
+                    adminDialogId, adminChatId, admin.getSupportDialogId(), admin.getSupportChatId(), result);
+            return result;
         }
 
         String text = firstValue(payload, "data[message][text]", "message[text]", "data.message.text");
@@ -257,25 +309,51 @@ public class ClientPortalService {
                 "data.message.reply_id",
                 "data.message.replyMessageId",
                 "data.message.replyToMessageId",
-                "data.message.parentId"
+                "data.message.parentId",
+                "data[message][replyTo]",
+                "data[message][quoteId]",
+                "data[message][context][id]",
+                "data[message][context][messageId]",
+                "data[message][params][REPLY_ID]",
+                "data[message][params][replyId]",
+                "data[message][params][reply_id]",
+                "data[message][params][ORIGINAL_ID]",
+                "data.message.replyTo",
+                "data.message.quoteId",
+                "data.message.context.id",
+                "data.message.context.messageId",
+                "data.message.params.REPLY_ID"
         );
         String userId = firstValue(payload, "data[user][id]", "user[id]", "data.user.id", "data[message][authorId]", "message[authorId]", "data.message.authorId");
         String userName = firstValue(payload, "data[user][name]", "user[name]", "data.user.name");
 
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][PARSED] event={} expectedBotId={} receivedBotId={} supportDialogId={} supportChatId={} receivedDialogId={} receivedChatId={} adminMessageId={} replyToAdminMessageId={} userId={} userName={} userIsBot={} text={}",
+                event, admin.getBotId(), botId, admin.getSupportDialogId(), admin.getSupportChatId(), adminDialogId, adminChatId, adminMessageId, replyToAdminMessageId, userId, userName, userIsBot, text);
+
         if (text == null || text.isBlank()) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "reason", "empty_text");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "empty_text");
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][SKIP] reason=empty_text adminMessageId={} result={}", adminMessageId, result);
+            return result;
         }
 
         if (adminMessageId != null && supportMessageRepository
                 .findFirstByDirectionAndAdminMessageIdOrderByIdAsc("ADMIN_TO_CLIENT", adminMessageId)
                 .isPresent()) {
             portalRepository.save(admin);
-            return Map.of("ok", true, "processed", false, "reason", "duplicate_admin_message");
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "reason", "duplicate_admin_message");
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_IN][SKIP] reason=duplicate_admin_message adminMessageId={} result={}", adminMessageId, result);
+            return result;
         }
 
         try {
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][RESOLVE_START] adminMessageId={} replyToAdminMessageId={} text={}",
+                    adminMessageId, replyToAdminMessageId, text);
             AdminReplyTarget target = resolveAdminReplyTarget(replyToAdminMessageId, text);
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][RESOLVED] adminMessageId={} replyToAdminMessageId={} targetClient={} targetClientDialogId={} targetText={} sourceSupportMessageId={} sourceAdminMessageId={}",
+                    adminMessageId, replyToAdminMessageId, portalInfo(target.client()), target.clientDialogId(), target.text(),
+                    target.sourceMessage() == null ? null : target.sourceMessage().getId(),
+                    target.sourceMessage() == null ? null : target.sourceMessage().getAdminMessageId());
             String clientMessageId = sendReplyToClient(target.client(), target.clientDialogId(), target.text());
 
             SupportMessage answer = new SupportMessage(target.client());
@@ -299,11 +377,17 @@ public class ClientPortalService {
 
             markSuccess(admin);
             markSuccess(target.client());
-            return Map.of("ok", true, "processed", true, "status", "SENT", "messageId", answer.getId());
+            Map<String, Object> result = Map.of("ok", true, "processed", true, "status", "SENT", "messageId", answer.getId());
+            TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][SENT_OK] answerSupportMessageId={} adminMessageId={} clientMessageId={} clientDialogId={} targetClient={} result={}",
+                    answer.getId(), adminMessageId, clientMessageId, target.clientDialogId(), portalInfo(target.client()), result);
+            return result;
         } catch (BitrixRestException | ResponseStatusException e) {
             String errorMessage = valueOrDefault(e.getMessage(), "Не удалось отправить ответ клиенту");
             markError(admin, errorMessage);
-            return Map.of("ok", true, "processed", false, "status", "ERROR", "message", errorMessage);
+            Map<String, Object> result = Map.of("ok", true, "processed", false, "status", "ERROR", "message", errorMessage);
+            TRAFFIC_LOG.error("[B24-ROUTE][ADMIN_TO_CLIENT][SENT_ERROR] adminMessageId={} replyToAdminMessageId={} error={} result={}",
+                    adminMessageId, replyToAdminMessageId, errorMessage, result, e);
+            return result;
         }
     }
 
@@ -314,12 +398,15 @@ public class ClientPortalService {
 
     private AdminReplyTarget resolveAdminReplyTarget(String replyToAdminMessageId, String text) {
         String answerText = text.trim();
+        TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][START] replyToAdminMessageId={} answerText={}", replyToAdminMessageId, answerText);
 
         if (replyToAdminMessageId != null && !replyToAdminMessageId.isBlank()) {
             SupportMessage source = supportMessageRepository
                     .findFirstByDirectionAndAdminMessageIdOrderByIdAsc("CLIENT_TO_ADMIN", replyToAdminMessageId)
                     .orElse(null);
             if (source != null) {
+                TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][FOUND_BY_REPLY_ID] replyToAdminMessageId={} sourceSupportMessageId={} sourceAdminMessageId={} sourceClientMessageId={} sourceClientDialogId={} sourceClient={}",
+                        replyToAdminMessageId, source.getId(), source.getAdminMessageId(), source.getClientMessageId(), source.getClientDialogId(), portalInfo(source.getClientInstallation()));
                 requireClientReplyTarget(source.getClientInstallation(), source.getClientDialogId());
                 return new AdminReplyTarget(
                         source.getClientInstallation(),
@@ -329,10 +416,14 @@ public class ClientPortalService {
                         source
                 );
             }
+            TRAFFIC_LOG.warn("[B24-ROUTE][RESOLVE_REPLY][NOT_FOUND_BY_REPLY_ID] replyToAdminMessageId={} recentClientForwards={}",
+                    replyToAdminMessageId, recentClientForwardRefs());
         }
 
         Matcher matcher = CLIENT_CODE_COMMAND.matcher(answerText);
         if (!matcher.matches()) {
+            TRAFFIC_LOG.error("[B24-ROUTE][RESOLVE_REPLY][FAILED] replyToAdminMessageId={} textDoesNotMatchClientCodeCommand=true recentClientForwards={}",
+                    replyToAdminMessageId, recentClientForwardRefs());
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Не найдено исходное обращение. Ответь reply на сообщение клиента или напиши #код_клиента текст ответа"
@@ -341,6 +432,7 @@ public class ClientPortalService {
 
         String clientCode = matcher.group(1).trim();
         String cleanText = matcher.group(2).trim();
+        TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][FALLBACK_CLIENT_CODE] clientCode={} cleanText={}", clientCode, cleanText);
         PortalInstallation client = portalRepository.findByClientCode(clientCode)
                 .filter(portal -> portal.getRole() == PortalRole.CLIENT)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Клиент с кодом #" + clientCode + " не найден"));
@@ -349,10 +441,13 @@ public class ClientPortalService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "У клиента #" + clientCode + " ещё нет активного диалога"));
 
         requireClientReplyTarget(client, latest.getClientDialogId());
+        TRAFFIC_LOG.info("[B24-ROUTE][RESOLVE_REPLY][FOUND_BY_CLIENT_CODE] clientCode={} latestSupportMessageId={} latestClientDialogId={} latestAdminMessageId={}",
+                clientCode, latest.getId(), latest.getClientDialogId(), latest.getAdminMessageId());
         return new AdminReplyTarget(client, latest.getClientDialogId(), null, cleanText, latest);
     }
 
     private String sendReplyToClient(PortalInstallation client, String clientDialogId, String text) {
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][SEND_START] client={} clientDialogId={} text={}", portalInfo(client), clientDialogId, text);
         requireClientReplyTarget(client, clientDialogId);
 
         String message = "[B]Ответ техподдержки «Умные продажи»:[/B]\n" + text;
@@ -366,8 +461,11 @@ public class ClientPortalService {
                 )
         );
 
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][SEND_PAYLOAD] client={} method=imbot.v2.Chat.Message.send payload={}", portalInfo(client), toJson(maskPayload(payload)));
         JsonNode root = bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
-        return extractMessageId(root);
+        String clientMessageId = extractMessageId(root);
+        TRAFFIC_LOG.info("[B24-ROUTE][ADMIN_TO_CLIENT][SEND_RESPONSE] client={} clientDialogId={} clientMessageId={} response={}", portalInfo(client), clientDialogId, clientMessageId, root);
+        return clientMessageId;
     }
 
     private void requireClientReplyTarget(PortalInstallation client, String clientDialogId) {
@@ -414,6 +512,8 @@ public class ClientPortalService {
     }
 
     private String forwardToAdminChat(PortalInstallation admin, PortalInstallation client, SupportMessage message) {
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_TO_ADMIN][BUILD_MESSAGE] supportMessageId={} client={} admin={} clientDialogId={} clientMessageId={} senderUserId={} senderName={}",
+                message.getId(), portalInfo(client), portalInfo(admin), message.getClientDialogId(), message.getClientMessageId(), message.getSenderUserId(), message.getSenderName());
         String text = "[B]Новое обращение клиента[/B]\n"
                 + "Портал: " + client.getTitle() + " (#" + client.getClientCode() + ")\n"
                 + "Домен: " + client.getDomain() + "\n"
@@ -435,15 +535,21 @@ public class ClientPortalService {
                 )
         );
 
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_TO_ADMIN][SEND_PAYLOAD] admin={} client={} supportMessageId={} method=imbot.v2.Chat.Message.send payload={}",
+                portalInfo(admin), portalInfo(client), message.getId(), toJson(maskPayload(payload)));
         JsonNode root = bitrixRestClient.callJson(admin.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
-        return extractMessageId(root);
+        String adminMessageId = extractMessageId(root);
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_TO_ADMIN][SEND_RESPONSE] supportMessageId={} adminMessageId={} response={}", message.getId(), adminMessageId, root);
+        return adminMessageId;
     }
 
     private void sendClientAcknowledgement(PortalInstallation client, String dialogId) {
         if (dialogId == null || dialogId.isBlank()) {
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_ACK][SKIP] reason=no_dialog_id client={}", portalInfo(client));
             return;
         }
         if (client.getBotId() == null || client.getBotToken() == null) {
+            TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_ACK][SKIP] reason=no_client_bot client={} dialogId={}", portalInfo(client), dialogId);
             return;
         }
 
@@ -456,7 +562,10 @@ public class ClientPortalService {
                         "urlPreview", false
                 )
         );
-        bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_ACK][SEND_PAYLOAD] client={} dialogId={} method=imbot.v2.Chat.Message.send payload={}",
+                portalInfo(client), dialogId, toJson(maskPayload(payload)));
+        JsonNode root = bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+        TRAFFIC_LOG.info("[B24-ROUTE][CLIENT_ACK][SEND_RESPONSE] client={} dialogId={} response={}", portalInfo(client), dialogId, root);
     }
 
     private PortalInstallation findReadyAdminPortal() {
@@ -520,6 +629,14 @@ public class ClientPortalService {
         put(result, "data[message][replyMessageId]", body.path("data").path("message").path("replyMessageId"));
         put(result, "data[message][replyToMessageId]", body.path("data").path("message").path("replyToMessageId"));
         put(result, "data[message][parentId]", body.path("data").path("message").path("parentId"));
+        put(result, "data[message][replyTo]", body.path("data").path("message").path("replyTo"));
+        put(result, "data[message][quoteId]", body.path("data").path("message").path("quoteId"));
+        put(result, "data[message][context][id]", body.path("data").path("message").path("context").path("id"));
+        put(result, "data[message][context][messageId]", body.path("data").path("message").path("context").path("messageId"));
+        put(result, "data[message][params][REPLY_ID]", body.path("data").path("message").path("params").path("REPLY_ID"));
+        put(result, "data[message][params][replyId]", body.path("data").path("message").path("params").path("replyId"));
+        put(result, "data[message][params][reply_id]", body.path("data").path("message").path("params").path("reply_id"));
+        put(result, "data[message][params][ORIGINAL_ID]", body.path("data").path("message").path("params").path("ORIGINAL_ID"));
         return result;
     }
 
@@ -623,6 +740,76 @@ public class ClientPortalService {
 
     private ClientPortalActionResponse response(boolean success, String message, PortalInstallation portal) {
         return new ClientPortalActionResponse(success, message, PortalInstallationResponse.from(portal));
+    }
+
+
+    private String portalInfo(PortalInstallation portal) {
+        if (portal == null) {
+            return "null";
+        }
+        return "{id=" + portal.getId()
+                + ", role=" + portal.getRole()
+                + ", title=" + portal.getTitle()
+                + ", domain=" + portal.getDomain()
+                + ", clientCode=" + portal.getClientCode()
+                + ", status=" + portal.getStatus()
+                + ", botId=" + portal.getBotId()
+                + ", botCode=" + portal.getBotCode()
+                + ", botType=" + portal.getBotType()
+                + ", supportChatId=" + portal.getSupportChatId()
+                + ", supportDialogId=" + portal.getSupportDialogId()
+                + ", botEventWebhookUrl=" + portal.getBotEventWebhookUrl()
+                + "}";
+    }
+
+    private Object maskPayload(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> masked = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                if (isSecretKey(key)) {
+                    masked.put(key, "***");
+                } else {
+                    masked.put(key, maskPayload(entry.getValue()));
+                }
+            }
+            return masked;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(this::maskPayload).toList();
+        }
+        return value;
+    }
+
+    private boolean isSecretKey(String key) {
+        if (key == null) {
+            return false;
+        }
+        String normalized = key.toLowerCase();
+        return normalized.contains("token")
+                || normalized.contains("application_token")
+                || normalized.contains("access_token")
+                || normalized.contains("refresh_token")
+                || normalized.contains("auth");
+    }
+
+    private List<Map<String, Object>> recentClientForwardRefs() {
+        return supportMessageRepository.findTop10ByDirectionOrderByCreatedAtDesc("CLIENT_TO_ADMIN")
+                .stream()
+                .map(message -> {
+                    Map<String, Object> ref = new LinkedHashMap<>();
+                    ref.put("supportMessageId", message.getId());
+                    ref.put("status", message.getStatus());
+                    ref.put("clientCode", message.getClientInstallation() == null ? null : message.getClientInstallation().getClientCode());
+                    ref.put("clientTitle", message.getClientInstallation() == null ? null : message.getClientInstallation().getTitle());
+                    ref.put("clientDialogId", message.getClientDialogId());
+                    ref.put("clientMessageId", message.getClientMessageId());
+                    ref.put("adminDialogId", message.getAdminDialogId());
+                    ref.put("adminMessageId", message.getAdminMessageId());
+                    ref.put("createdAt", message.getCreatedAt());
+                    return ref;
+                })
+                .toList();
     }
 
     private record AdminReplyTarget(

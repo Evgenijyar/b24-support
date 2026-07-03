@@ -9,6 +9,8 @@ public interface SupportMessageRepository extends JpaRepository<SupportMessage, 
 
     List<SupportMessage> findTop50ByOrderByCreatedAtDesc();
 
+    List<SupportMessage> findTop10ByDirectionOrderByCreatedAtDesc(String direction);
+
     Optional<SupportMessage> findFirstByClientInstallation_IdAndClientMessageIdOrderByIdAsc(Long clientInstallationId,
                                                                                            String clientMessageId);
 

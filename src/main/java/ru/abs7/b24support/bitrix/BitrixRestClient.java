@@ -1,5 +1,7 @@
 package ru.abs7.b24support.bitrix;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import java.io.IOException;
@@ -12,8 +14,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class BitrixRestClient {
+
+    private static final Logger TRAFFIC_LOG = LoggerFactory.getLogger("BITRIX_TRAFFIC");
+    private static final AtomicLong REST_SEQUENCE = new AtomicLong();
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -40,7 +46,7 @@ public class BitrixRestClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
 
-        return send(request);
+        return send(request, method, endpoint, body, "FORM");
     }
 
     public JsonNode callJson(String webhookUrl, String method, Object payload) {
@@ -59,34 +65,95 @@ public class BitrixRestClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build();
 
-        return send(request);
+        return send(request, method, endpoint, body, "JSON");
     }
 
-    private JsonNode send(HttpRequest request) {
+    private JsonNode send(HttpRequest request, String method, String endpoint, String requestBody, String bodyType) {
+        long restId = REST_SEQUENCE.incrementAndGet();
+        long startedAt = System.currentTimeMillis();
+        String safeEndpoint = maskEndpoint(endpoint);
+        String safeRequestBody = maskSecrets(requestBody);
+
+        TRAFFIC_LOG.info("[B24-REST][{}][REQUEST] method={} bodyType={} endpoint={} body={}",
+                restId,
+                method,
+                bodyType,
+                safeEndpoint,
+                safeRequestBody);
+
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            long durationMs = System.currentTimeMillis() - startedAt;
+            String responseBody = response.body() == null ? "" : response.body();
+
+            TRAFFIC_LOG.info("[B24-REST][{}][RESPONSE] method={} status={} durationMs={} body={}",
+                    restId,
+                    method,
+                    response.statusCode(),
+                    durationMs,
+                    maskSecrets(responseBody));
+
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                TRAFFIC_LOG.error("[B24-REST][{}][HTTP_ERROR] method={} status={} endpoint={} requestBody={} responseBody={}",
+                        restId,
+                        method,
+                        response.statusCode(),
+                        safeEndpoint,
+                        safeRequestBody,
+                        maskSecrets(responseBody));
                 throw new BitrixRestException("Bitrix24 вернул HTTP " + response.statusCode());
             }
 
-            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode root = objectMapper.readTree(responseBody);
             if (root.hasNonNull("error")) {
                 String error = root.path("error").asText();
                 String description = root.path("error_description").asText();
+                TRAFFIC_LOG.error("[B24-REST][{}][BITRIX_ERROR] method={} error={} description={} endpoint={} requestBody={} responseBody={}",
+                        restId,
+                        method,
+                        error,
+                        description,
+                        safeEndpoint,
+                        safeRequestBody,
+                        maskSecrets(responseBody));
                 throw new BitrixRestException((description == null || description.isBlank()) ? error : description);
             }
 
             return root;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            TRAFFIC_LOG.error("[B24-REST][{}][INTERRUPTED] method={} endpoint={} requestBody={}",
+                    restId,
+                    method,
+                    safeEndpoint,
+                    safeRequestBody,
+                    e);
             throw new BitrixRestException("REST-запрос к Bitrix24 был прерван", e);
         } catch (IllegalArgumentException e) {
+            TRAFFIC_LOG.error("[B24-REST][{}][BAD_URL] method={} endpoint={} requestBody={}",
+                    restId,
+                    method,
+                    safeEndpoint,
+                    safeRequestBody,
+                    e);
             throw new BitrixRestException("Некорректный webhook URL Bitrix24", e);
         } catch (IOException e) {
+            TRAFFIC_LOG.error("[B24-REST][{}][IO_ERROR] method={} endpoint={} requestBody={}",
+                    restId,
+                    method,
+                    safeEndpoint,
+                    safeRequestBody,
+                    e);
             throw new BitrixRestException("Не удалось прочитать ответ Bitrix24", e);
         } catch (BitrixRestException e) {
             throw e;
         } catch (Exception e) {
+            TRAFFIC_LOG.error("[B24-REST][{}][JSON_ERROR] method={} endpoint={} requestBody={}",
+                    restId,
+                    method,
+                    safeEndpoint,
+                    safeRequestBody,
+                    e);
             throw new BitrixRestException("Не удалось обработать JSON-ответ Bitrix24", e);
         }
     }
@@ -127,5 +194,27 @@ public class BitrixRestClient {
             builder.append(URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8));
         }
         return builder.toString();
+    }
+
+    private String maskEndpoint(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return endpoint;
+        }
+        return endpoint.replaceAll("/rest/[^/]+/[^/]+/", "/rest/***/***/");
+    }
+
+    private String maskSecrets(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        String masked = value;
+        masked = masked.replaceAll("(?i)(\\\"botToken\\\"\\s*:\\s*\\\")[^\\\"]+", "$1***");
+        masked = masked.replaceAll("(?i)(botToken=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(application_token%5D=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(application_token=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(access_token=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(auth%5Baccess_token%5D=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(refresh_token=)[^&\\s]+", "$1***");
+        return masked;
     }
 }
