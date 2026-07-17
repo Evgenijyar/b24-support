@@ -17,6 +17,7 @@ import ru.abs7.b24support.domain.PortalInstallation;
 import ru.abs7.b24support.domain.PortalRole;
 import ru.abs7.b24support.domain.PortalStatus;
 import ru.abs7.b24support.domain.SupportMessage;
+import ru.abs7.b24support.domain.SupportTicket;
 import ru.abs7.b24support.repo.PortalInstallationRepository;
 import ru.abs7.b24support.repo.SupportMessageRepository;
 import tools.jackson.databind.JsonNode;
@@ -43,6 +44,7 @@ public class ClientPortalService {
 
     private final PortalInstallationRepository portalRepository;
     private final SupportMessageRepository supportMessageRepository;
+    private final SupportTicketService supportTicketService;
     private final BitrixRestClient bitrixRestClient;
     private final ObjectMapper objectMapper;
     private final String publicBaseUrl;
@@ -50,11 +52,13 @@ public class ClientPortalService {
 
     public ClientPortalService(PortalInstallationRepository portalRepository,
                                SupportMessageRepository supportMessageRepository,
+                               SupportTicketService supportTicketService,
                                BitrixRestClient bitrixRestClient,
                                ObjectMapper objectMapper,
                                @Value("${app.public-base-url}") String publicBaseUrl) {
         this.portalRepository = portalRepository;
         this.supportMessageRepository = supportMessageRepository;
+        this.supportTicketService = supportTicketService;
         this.bitrixRestClient = bitrixRestClient;
         this.objectMapper = objectMapper;
         this.publicBaseUrl = publicBaseUrl;
@@ -211,16 +215,36 @@ public class ClientPortalService {
         supportMessageRepository.save(message);
 
         try {
-            PortalInstallation admin = findReadyAdminPortal();
-            String adminMessageId = forwardToAdminChat(admin, client, message);
-            message.setAdminDialogId(admin.getSupportDialogId());
+            SupportTicketService.TicketResolution resolution = supportTicketService.resolveOrCreateOpenTicket(client, dialogId);
+            SupportTicket ticket = resolution.ticket();
+            message.setSupportTicket(ticket);
+            String adminMessageId = supportTicketService.forwardClientMessage(ticket, message);
+            message.setAdminDialogId(ticket.getAdminDialogId());
             message.setAdminMessageId(adminMessageId);
             message.setStatus("FORWARDED");
             supportMessageRepository.save(message);
             client.setLastClientMessageAt(now);
             markSuccess(client);
-            sendClientAcknowledgement(client, dialogId);
-            return Map.of("ok", true, "processed", true, "status", "FORWARDED", "messageId", message.getId());
+            if (resolution.created()) {
+                try {
+                    sendClientAcknowledgement(client, dialogId);
+                } catch (BitrixRestException acknowledgementError) {
+                    TRAFFIC_LOG.warn(
+                            "[B24-ROUTE][CLIENT_ACK][FAILED] clientCode={} ticketId={} error={}",
+                            client.getClientCode(),
+                            ticket.getId(),
+                            acknowledgementError.getMessage()
+                    );
+                }
+            }
+            return Map.of(
+                    "ok", true,
+                    "processed", true,
+                    "status", "FORWARDED",
+                    "messageId", message.getId(),
+                    "ticketId", ticket.getId(),
+                    "chatCreated", resolution.created()
+            );
         } catch (BitrixRestException | ResponseStatusException e) {
             String errorMessage = valueOrDefault(e.getMessage(), "Не удалось переслать сообщение в админский чат");
             message.setStatus("ERROR");
@@ -262,7 +286,9 @@ public class ClientPortalService {
 
         String adminDialogId = firstValue(payload, "data[chat][dialogId]", "chat[dialogId]", "data.chat.dialogId");
         String adminChatId = firstValue(payload, "data[message][chatId]", "message[chatId]", "data.message.chatId", "data[chat][id]", "chat[id]", "data.chat.id");
-        if (!supportChatMatches(admin, adminDialogId, adminChatId)) {
+        SupportTicket activeTicket = supportTicketService.findOpenByAdminChat(adminDialogId, adminChatId);
+        boolean legacySupportChat = supportChatMatches(admin, adminDialogId, adminChatId);
+        if (activeTicket == null && !legacySupportChat) {
             portalRepository.save(admin);
             return Map.of("ok", true, "processed", false, "reason", "not_support_chat");
         }
@@ -317,14 +343,27 @@ public class ClientPortalService {
         }
 
         try {
-            AdminReplyTarget target = resolveAdminReplyTarget(replyToAdminMessageId, text);
+            AdminReplyTarget target = activeTicket == null
+                    ? resolveAdminReplyTarget(replyToAdminMessageId, text)
+                    : new AdminReplyTarget(
+                            activeTicket.getClientInstallation(),
+                            activeTicket.getClientDialogId(),
+                            null,
+                            text.trim(),
+                            null,
+                            activeTicket
+                    );
             String clientMessageId = sendReplyToClient(target.client(), target.clientDialogId(), target.text());
 
             SupportMessage answer = new SupportMessage(target.client());
+            answer.setSupportTicket(target.ticket());
             answer.setDirection("ADMIN_TO_CLIENT");
             answer.setClientDialogId(target.clientDialogId());
             answer.setClientMessageId(clientMessageId);
-            answer.setAdminDialogId(valueOrDefault(adminDialogId, admin.getSupportDialogId()));
+            answer.setAdminDialogId(valueOrDefault(
+                    adminDialogId,
+                    target.ticket() == null ? admin.getSupportDialogId() : target.ticket().getAdminDialogId()
+            ));
             answer.setAdminMessageId(adminMessageId);
             answer.setReplyToAdminMessageId(target.replyToAdminMessageId());
             answer.setSenderUserId(userId);
@@ -371,7 +410,8 @@ public class ClientPortalService {
                         source.getClientDialogId(),
                         replyToAdminMessageId,
                         answerText,
-                        source
+                        source,
+                        source.getSupportTicket()
                 );
             }
             TRAFFIC_LOG.warn("[B24-ROUTE][RESOLVE_REPLY][BY_REPLY_ID][NOT_FOUND] replyToAdminMessageId={} text={}", replyToAdminMessageId, answerText);
@@ -396,7 +436,7 @@ public class ClientPortalService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "У клиента #" + clientCode + " ещё нет активного диалога"));
 
         requireClientReplyTarget(client, latest.getClientDialogId());
-        return new AdminReplyTarget(client, latest.getClientDialogId(), null, cleanText, latest);
+        return new AdminReplyTarget(client, latest.getClientDialogId(), null, cleanText, latest, latest.getSupportTicket());
     }
 
     private String sendReplyToClient(PortalInstallation client, String clientDialogId, String text) {
@@ -439,7 +479,7 @@ public class ClientPortalService {
         if (chatId != null && !chatId.isBlank() && admin.getSupportChatId() != null && !admin.getSupportChatId().isBlank()) {
             return Objects.equals(admin.getSupportChatId(), chatId);
         }
-        return true;
+        return false;
     }
 
     private void configureExistingClientBotWebhook(PortalInstallation client, String webhookUrl) {
@@ -521,8 +561,9 @@ public class ClientPortalService {
         if (admin.getWebhookUrl() == null || admin.getWebhookUrl().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "У админского портала не заполнен webhook");
         }
-        if (admin.getBotId() == null || admin.getBotToken() == null || admin.getSupportDialogId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала создай админского бота и админский чат");
+        if (admin.getBotId() == null || admin.getBotId().isBlank()
+                || admin.getBotToken() == null || admin.getBotToken().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сначала создай админского бота");
         }
         return admin;
     }
@@ -696,7 +737,8 @@ public class ClientPortalService {
             String clientDialogId,
             String replyToAdminMessageId,
             String text,
-            SupportMessage sourceMessage
+            SupportMessage sourceMessage,
+            SupportTicket ticket
     ) {
     }
 }

@@ -6,6 +6,7 @@ import java.time.OffsetDateTime;
 public record SupportMessageResponse(
         Long id,
         Long clientPortalId,
+        Long supportTicketId,
         String clientPortalTitle,
         String clientCode,
         String clientDialogId,
@@ -23,6 +24,7 @@ public record SupportMessageResponse(
         return new SupportMessageResponse(
                 message.getId(),
                 client == null ? null : client.getId(),
+                message.getSupportTicket() == null ? null : message.getSupportTicket().getId(),
                 client == null ? null : client.getTitle(),
                 client == null ? null : client.getClientCode(),
                 message.getClientDialogId(),

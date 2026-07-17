@@ -26,6 +26,10 @@ public class SupportMessage {
     @JoinColumn(name = "client_installation_id")
     private PortalInstallation clientInstallation;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "support_ticket_id")
+    private SupportTicket supportTicket;
+
     @Column(name = "client_dialog_id", length = 255)
     private String clientDialogId;
 
@@ -83,6 +87,14 @@ public class SupportMessage {
 
     public PortalInstallation getClientInstallation() {
         return clientInstallation;
+    }
+
+    public SupportTicket getSupportTicket() {
+        return supportTicket;
+    }
+
+    public void setSupportTicket(SupportTicket supportTicket) {
+        this.supportTicket = supportTicket;
     }
 
     public void setClientInstallation(PortalInstallation clientInstallation) {
