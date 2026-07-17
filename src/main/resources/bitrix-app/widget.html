@@ -304,28 +304,29 @@
     }
 
     function resize(state) {
-        if (typeof BX24.resizeWindow !== 'function') return;
+        const applySize = () => {
+            const scrollSize = typeof BX24.getScrollSize === 'function'
+                ? BX24.getScrollSize()
+                : { scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight };
 
-        let width = 360;
-        let minHeight = 150;
+            const width = Math.max(500, Number(scrollSize.scrollWidth || 0) + 8);
+            const minHeight = state === 'OPEN' ? 255
+                : state === 'CLOSED' ? 225
+                    : 175;
+            const height = Math.max(minHeight, Number(scrollSize.scrollHeight || 0) + 8);
 
-        if (state === 'OPEN') {
-            width = 360;
-            minHeight = 190;
-        } else if (state === 'CLOSED') {
-            width = 340;
-            minHeight = 170;
-        } else if (state === 'EMPTY' || state === 'ERROR') {
-            width = 340;
-            minHeight = 145;
-        } else if (state === 'LOADING') {
-            width = 340;
-            minHeight = 145;
-        }
+            if (typeof BX24.resizeWindow === 'function') {
+                BX24.resizeWindow(width, height);
+            }
+            if (typeof BX24.fitWindow === 'function') {
+                BX24.fitWindow();
+            }
+        };
 
-        const contentHeight = document.documentElement.scrollHeight + 8;
-        const height = Math.max(minHeight, contentHeight);
-        BX24.resizeWindow(width, height);
+        // The IM_TEXTAREA container is created by Bitrix24. Give it one render frame
+        // before measuring the card, then repeat after fonts/layout have settled.
+        window.requestAnimationFrame(applySize);
+        window.setTimeout(applySize, 120);
     }
 
     BX24.ready(() => {

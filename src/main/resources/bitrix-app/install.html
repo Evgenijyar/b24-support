@@ -67,7 +67,7 @@
                 });
             }
 
-            setStatus('Регистрирую кнопку над полем ввода…');
+            setStatus('Регистрирую увеличенное окно кнопки над полем ввода…');
             await callMethod('placement.bind', {
                 PLACEMENT: 'IM_TEXTAREA',
                 HANDLER: handlerUrl,
@@ -82,14 +82,14 @@
                     role: 'USER',
                     extranet: 'N',
                     color: 'LIGHT_BLUE',
-                    width: 100,
-                    height: 100
+                    width: 170,
+                    height: 175
                 }
             });
 
             setStatus('Кнопка установлена. Завершаю установку приложения…');
             BX24.installFinish();
-            setStatus('Готово. Откройте или обновите групповой чат — над полем ввода появится пункт «Обращение».');
+            setStatus('Готово. Размер окна обновлён. Закройте открытый виджет, обновите Bitrix24 и снова нажмите пункт «Обращение».');
             button.disabled = false;
         } catch (error) {
             setStatus('Ошибка установки: ' + (error.message || error), true);
