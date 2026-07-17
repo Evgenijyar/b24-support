@@ -284,11 +284,6 @@
 
     async function executeAction() {
         const action = currentContext.action;
-        const question = action === 'DELETE'
-            ? 'Удалить этот чат у всех специалистов техподдержки?'
-            : 'Закрыть обращение и отправить клиенту уведомление о выполнении?';
-        if (!window.confirm(question)) return;
-
         const button = document.getElementById('actionButton');
         if (button) {
             button.disabled = true;
