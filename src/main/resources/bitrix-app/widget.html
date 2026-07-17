@@ -6,30 +6,162 @@
     <title>Обращение</title>
     <script src="https://api.bitrix24.com/api/v1/"></script>
     <style>
-        :root { font-family: Inter, Arial, sans-serif; color: #172033; background: #ffffff; }
+        :root {
+            font-family: Inter, Arial, sans-serif;
+            color: #172033;
+            background: transparent;
+        }
+
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 18px; min-height: 170px; }
-        .panel { max-width: 520px; margin: 0 auto; }
-        .eyebrow { color: #7b879a; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
-        h1 { margin: 5px 0 6px; font-size: 20px; }
-        .meta { color: #6b778c; font-size: 13px; margin-bottom: 16px; }
-        .action { width: 100%; min-height: 46px; border: 0; border-radius: 11px; font-size: 15px; font-weight: 800; cursor: pointer; color: #fff; transition: transform .12s ease, opacity .12s ease; }
-        .action:hover { transform: translateY(-1px); }
-        .action:disabled { opacity: .55; cursor: wait; transform: none; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            background: transparent;
+        }
+
+        body {
+            min-height: 120px;
+        }
+
+        .widget-wrap {
+            width: 100%;
+            padding: 8px;
+        }
+
+        .widget-card {
+            width: 100%;
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 14px 16px 16px;
+            box-shadow: 0 8px 24px rgba(23, 32, 51, 0.12);
+        }
+
+        .eyebrow {
+            color: #7b879a;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            margin-bottom: 8px;
+        }
+
+        .company-title {
+            margin: 0 0 8px;
+            font-size: 22px;
+            font-weight: 800;
+            line-height: 1.15;
+            white-space: normal;
+            word-break: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .meta {
+            color: #5f6f86;
+            font-size: 14px;
+            line-height: 1.45;
+            margin-bottom: 14px;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef5fb;
+            color: #285680;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: .02em;
+            margin-bottom: 10px;
+        }
+
+        .action {
+            width: 100%;
+            min-height: 46px;
+            border: 0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            color: #fff;
+            transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease;
+        }
+
+        .action:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(23, 32, 51, 0.14);
+        }
+
+        .action:disabled {
+            opacity: .6;
+            cursor: wait;
+            transform: none;
+            box-shadow: none;
+        }
+
         .action.close { background: #18a8e1; }
         .action.delete { background: #e9505b; }
-        .message { margin-top: 13px; padding: 11px 13px; border-radius: 9px; background: #f2f6fa; color: #526077; font-size: 13px; line-height: 1.45; }
-        .message.error { background: #fff0f0; color: #9d3030; }
-        .message.success { background: #edf9f1; color: #277247; }
-        .spinner { width: 22px; height: 22px; margin: 45px auto 15px; border: 3px solid #dce7ef; border-top-color: #18a8e1; border-radius: 50%; animation: spin .8s linear infinite; }
-        .loading { text-align: center; color: #6b778c; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .message {
+            margin-top: 12px;
+            padding: 11px 12px;
+            border-radius: 12px;
+            background: #f4f7fb;
+            color: #526077;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        .message.error {
+            background: #fff1f1;
+            color: #9d3030;
+        }
+
+        .message.success {
+            background: #edf9f1;
+            color: #277247;
+        }
+
+        .loading-card,
+        .empty-card,
+        .error-card {
+            text-align: center;
+        }
+
+        .loading-title,
+        .empty-title,
+        .error-title {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
+        .spinner {
+            width: 22px;
+            height: 22px;
+            margin: 8px auto 14px;
+            border: 3px solid #dce7ef;
+            border-top-color: #18a8e1;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+
+        .loading-text {
+            color: #6b778c;
+            font-size: 14px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-<main id="root" class="panel">
-    <div class="loading"><div class="spinner"></div>Загружаю обращение…</div>
-</main>
+<main id="root" class="widget-wrap"></main>
 <script>
     const root = document.getElementById('root');
     let session = null;
@@ -42,6 +174,16 @@
             .replaceAll('>', '&gt;')
             .replaceAll('"', '&quot;')
             .replaceAll("'", '&#039;');
+    }
+
+    function renderLoading() {
+        root.innerHTML = `
+            <section class="widget-card loading-card">
+                <div class="spinner"></div>
+                <div class="loading-title">Загружаю обращение…</div>
+                <div class="loading-text">Секунду, получаю статус и доступные действия.</div>
+            </section>`;
+        resize('LOADING');
     }
 
     async function postJson(path, payload) {
@@ -85,10 +227,8 @@
             if (!session) session = buildSession();
             currentContext = await postJson('/api/bitrix/widget/context', session);
             render(currentContext, message, messageType);
-            resize();
         } catch (error) {
             renderError(error.message || String(error));
-            resize();
         }
     }
 
@@ -96,9 +236,12 @@
         const ticket = context.ticket;
         if (!ticket) {
             root.innerHTML = `
-                <div class="eyebrow">B24 Support</div>
-                <h1>Нет активного обращения</h1>
-                <div class="message">${escapeHtml(context.message)}</div>`;
+                <section class="widget-card empty-card">
+                    <div class="eyebrow">B24 Support</div>
+                    <div class="empty-title">Нет активного обращения</div>
+                    <div class="message">${escapeHtml(context.message)}</div>
+                </section>`;
+            resize('EMPTY');
             return;
         }
 
@@ -110,14 +253,18 @@
             : `<div class="message">${escapeHtml(context.message)}</div>`;
 
         root.innerHTML = `
-            <div class="eyebrow">Обращение #${escapeHtml(ticket.id)}</div>
-            <h1>${escapeHtml(ticket.clientTitle || ticket.chatTitle)}</h1>
-            <div class="meta">Статус: ${escapeHtml(ticket.status)} · сотрудник: ${escapeHtml(context.currentUserName)}</div>
-            ${button}
-            ${feedback}`;
+            <section class="widget-card">
+                <div class="eyebrow">Обращение #${escapeHtml(ticket.id)}</div>
+                <h1 class="company-title">${escapeHtml(ticket.clientTitle || ticket.chatTitle)}</h1>
+                <div class="status-badge">Статус: ${escapeHtml(ticket.status)}</div>
+                <div class="meta">Сотрудник: ${escapeHtml(context.currentUserName)}</div>
+                ${button}
+                ${feedback}
+            </section>`;
 
         const actionButton = document.getElementById('actionButton');
         if (actionButton) actionButton.addEventListener('click', executeAction);
+        resize(ticket.status);
     }
 
     async function executeAction() {
@@ -148,19 +295,41 @@
 
     function renderError(message) {
         root.innerHTML = `
-            <div class="eyebrow">B24 Support</div>
-            <h1>Действие недоступно</h1>
-            <div class="message error">${escapeHtml(message)}</div>`;
+            <section class="widget-card error-card">
+                <div class="eyebrow">B24 Support</div>
+                <div class="error-title">Действие недоступно</div>
+                <div class="message error">${escapeHtml(message)}</div>
+            </section>`;
+        resize('ERROR');
     }
 
-    function resize() {
-        if (typeof BX24.resizeWindow === 'function') {
-            const height = Math.max(180, document.documentElement.scrollHeight + 8);
-            BX24.resizeWindow(520, height);
+    function resize(state) {
+        if (typeof BX24.resizeWindow !== 'function') return;
+
+        let width = 360;
+        let minHeight = 150;
+
+        if (state === 'OPEN') {
+            width = 360;
+            minHeight = 190;
+        } else if (state === 'CLOSED') {
+            width = 340;
+            minHeight = 170;
+        } else if (state === 'EMPTY' || state === 'ERROR') {
+            width = 340;
+            minHeight = 145;
+        } else if (state === 'LOADING') {
+            width = 340;
+            minHeight = 145;
         }
+
+        const contentHeight = document.documentElement.scrollHeight + 8;
+        const height = Math.max(minHeight, contentHeight);
+        BX24.resizeWindow(width, height);
     }
 
     BX24.ready(() => {
+        renderLoading();
         BX24.init(() => loadContext());
     });
 </script>
