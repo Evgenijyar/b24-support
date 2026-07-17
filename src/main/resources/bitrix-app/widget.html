@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Обращение</title>
+    <script src="https://api.bitrix24.com/api/v1/"></script>
+    <style>
+        :root { font-family: Inter, Arial, sans-serif; color: #172033; background: #ffffff; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 18px; min-height: 170px; }
+        .panel { max-width: 520px; margin: 0 auto; }
+        .eyebrow { color: #7b879a; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+        h1 { margin: 5px 0 6px; font-size: 20px; }
+        .meta { color: #6b778c; font-size: 13px; margin-bottom: 16px; }
+        .action { width: 100%; min-height: 46px; border: 0; border-radius: 11px; font-size: 15px; font-weight: 800; cursor: pointer; color: #fff; transition: transform .12s ease, opacity .12s ease; }
+        .action:hover { transform: translateY(-1px); }
+        .action:disabled { opacity: .55; cursor: wait; transform: none; }
+        .action.close { background: #18a8e1; }
+        .action.delete { background: #e9505b; }
+        .message { margin-top: 13px; padding: 11px 13px; border-radius: 9px; background: #f2f6fa; color: #526077; font-size: 13px; line-height: 1.45; }
+        .message.error { background: #fff0f0; color: #9d3030; }
+        .message.success { background: #edf9f1; color: #277247; }
+        .spinner { width: 22px; height: 22px; margin: 45px auto 15px; border: 3px solid #dce7ef; border-top-color: #18a8e1; border-radius: 50%; animation: spin .8s linear infinite; }
+        .loading { text-align: center; color: #6b778c; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+<main id="root" class="panel">
+    <div class="loading"><div class="spinner"></div>Загружаю обращение…</div>
+</main>
+<script>
+    const root = document.getElementById('root');
+    let session = null;
+    let currentContext = null;
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    async function postJson(path, payload) {
+        const response = await fetch(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            credentials: 'same-origin'
+        });
+        if (!response.ok) {
+            let message = 'HTTP ' + response.status;
+            try {
+                const data = await response.json();
+                message = data.detail || data.message || data.error || message;
+            } catch (_) {
+                const text = await response.text();
+                if (text) message = text;
+            }
+            throw new Error(message);
+        }
+        return response.json();
+    }
+
+    function buildSession() {
+        const placement = BX24.placement.info();
+        const auth = BX24.getAuth();
+        const options = placement && placement.options ? placement.options : {};
+        const dialogId = options.dialogId || options.DIALOG_ID;
+        const domain = auth.domain || auth.DOMAIN;
+        const memberId = auth.member_id || auth.memberId || auth.MEMBER_ID || '';
+        const accessToken = auth.access_token || auth.accessToken || auth.AUTH_ID;
+
+        if (!dialogId || !domain || !accessToken) {
+            throw new Error('Bitrix24 не передал контекст чата или авторизацию приложения');
+        }
+        return { dialogId, domain, memberId, accessToken };
+    }
+
+    async function loadContext(message, messageType) {
+        try {
+            if (!session) session = buildSession();
+            currentContext = await postJson('/api/bitrix/widget/context', session);
+            render(currentContext, message, messageType);
+            resize();
+        } catch (error) {
+            renderError(error.message || String(error));
+            resize();
+        }
+    }
+
+    function render(context, message, messageType) {
+        const ticket = context.ticket;
+        if (!ticket) {
+            root.innerHTML = `
+                <div class="eyebrow">B24 Support</div>
+                <h1>Нет активного обращения</h1>
+                <div class="message">${escapeHtml(context.message)}</div>`;
+            return;
+        }
+
+        const button = context.available && context.buttonLabel
+            ? `<button id="actionButton" class="action ${context.action === 'DELETE' ? 'delete' : 'close'}" type="button">${escapeHtml(context.buttonLabel)}</button>`
+            : '';
+        const feedback = message
+            ? `<div class="message ${messageType || ''}">${escapeHtml(message)}</div>`
+            : `<div class="message">${escapeHtml(context.message)}</div>`;
+
+        root.innerHTML = `
+            <div class="eyebrow">Обращение #${escapeHtml(ticket.id)}</div>
+            <h1>${escapeHtml(ticket.clientTitle || ticket.chatTitle)}</h1>
+            <div class="meta">Статус: ${escapeHtml(ticket.status)} · сотрудник: ${escapeHtml(context.currentUserName)}</div>
+            ${button}
+            ${feedback}`;
+
+        const actionButton = document.getElementById('actionButton');
+        if (actionButton) actionButton.addEventListener('click', executeAction);
+    }
+
+    async function executeAction() {
+        const action = currentContext.action;
+        const question = action === 'DELETE'
+            ? 'Удалить этот чат у всех специалистов техподдержки?'
+            : 'Закрыть обращение и отправить клиенту уведомление о выполнении?';
+        if (!window.confirm(question)) return;
+
+        const button = document.getElementById('actionButton');
+        if (button) {
+            button.disabled = true;
+            button.textContent = action === 'DELETE' ? 'Удаляю чат…' : 'Закрываю обращение…';
+        }
+
+        try {
+            const result = await postJson('/api/bitrix/widget/action', { ...session, action });
+            await loadContext(result.message, result.success ? 'success' : 'error');
+            if (result.success && action === 'DELETE') {
+                window.setTimeout(() => {
+                    if (typeof BX24.closeApplication === 'function') BX24.closeApplication();
+                }, 1200);
+            }
+        } catch (error) {
+            await loadContext(error.message || String(error), 'error');
+        }
+    }
+
+    function renderError(message) {
+        root.innerHTML = `
+            <div class="eyebrow">B24 Support</div>
+            <h1>Действие недоступно</h1>
+            <div class="message error">${escapeHtml(message)}</div>`;
+    }
+
+    function resize() {
+        if (typeof BX24.resizeWindow === 'function') {
+            const height = Math.max(180, document.documentElement.scrollHeight + 8);
+            BX24.resizeWindow(520, height);
+        }
+    }
+
+    BX24.ready(() => {
+        BX24.init(() => loadContext());
+    });
+</script>
+</body>
+</html>

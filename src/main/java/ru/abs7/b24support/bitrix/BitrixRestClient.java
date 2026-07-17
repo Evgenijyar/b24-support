@@ -49,6 +49,26 @@ public class BitrixRestClient {
         return send(request, method, endpoint, body, "FORM");
     }
 
+
+    public JsonNode callOAuth(String portalDomain, String method, String accessToken, Map<String, String> params) {
+        String endpoint = buildOAuthEndpoint(portalDomain, method);
+        Map<String, String> bodyParams = new LinkedHashMap<>();
+        if (params != null) {
+            bodyParams.putAll(params);
+        }
+        bodyParams.put("auth", accessToken);
+        String body = encode(bodyParams);
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
+                .timeout(Duration.ofSeconds(35))
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                .header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        return send(request, method, endpoint, body, "OAUTH_FORM");
+    }
+
     public JsonNode callJson(String webhookUrl, String method, Object payload) {
         String endpoint = buildEndpoint(webhookUrl, method);
         String body;
@@ -158,6 +178,28 @@ public class BitrixRestClient {
         }
     }
 
+
+    private String buildOAuthEndpoint(String portalDomain, String method) {
+        String host = portalDomain == null ? "" : portalDomain.trim().toLowerCase();
+        host = host.replaceFirst("^https?://", "").replaceAll("/+$", "");
+        if (host.isBlank() || !host.matches("[a-z0-9.-]+(?::[0-9]{1,5})?")) {
+            throw new BitrixRestException("Некорректный домен Bitrix24");
+        }
+
+        String cleanMethod = method == null ? "" : method.trim();
+        if (cleanMethod.isBlank()) {
+            throw new BitrixRestException("REST-метод Bitrix24 не указан");
+        }
+        if (cleanMethod.endsWith(".json")) {
+            cleanMethod = cleanMethod.substring(0, cleanMethod.length() - ".json".length());
+        }
+        if (!cleanMethod.matches("[A-Za-z0-9._]+")) {
+            throw new BitrixRestException("Некорректный REST-метод Bitrix24");
+        }
+
+        return "https://" + host + "/rest/" + cleanMethod + ".json";
+    }
+
     private String buildEndpoint(String webhookUrl, String method) {
         String base = webhookUrl == null ? "" : webhookUrl.trim();
         if (base.isBlank()) {
@@ -213,6 +255,7 @@ public class BitrixRestClient {
         masked = masked.replaceAll("(?i)(application_token%5D=)[^&\\s]+", "$1***");
         masked = masked.replaceAll("(?i)(application_token=)[^&\\s]+", "$1***");
         masked = masked.replaceAll("(?i)(access_token=)[^&\\s]+", "$1***");
+        masked = masked.replaceAll("(?i)(auth=)[^&\\s]+", "$1***");
         masked = masked.replaceAll("(?i)(auth%5Baccess_token%5D=)[^&\\s]+", "$1***");
         masked = masked.replaceAll("(?i)(refresh_token=)[^&\\s]+", "$1***");
         return masked;
