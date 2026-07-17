@@ -7,8 +7,8 @@
     <script src="https://api.bitrix24.com/api/v1/"></script>
     <style>
         :root {
-            font-family: Inter, Arial, sans-serif;
-            color: #172033;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            color: #333c48;
             background: transparent;
         }
 
@@ -20,9 +20,7 @@
             background: transparent;
         }
 
-        body {
-            min-height: 120px;
-        }
+        body { min-height: 120px; }
 
         .widget-wrap {
             width: 100%;
@@ -31,93 +29,108 @@
 
         .widget-card {
             width: 100%;
+            min-width: 0;
             background: #ffffff;
-            border-radius: 16px;
-            padding: 14px 16px 16px;
-            box-shadow: 0 8px 24px rgba(23, 32, 51, 0.12);
+            border: 1px solid rgba(82, 92, 105, 0.12);
+            border-radius: 14px;
+            padding: 14px 16px;
+            box-shadow: 0 7px 22px rgba(0, 0, 0, 0.12);
+        }
+
+        .header-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .title-block {
+            min-width: 0;
+            flex: 1 1 auto;
         }
 
         .eyebrow {
-            color: #7b879a;
-            font-size: 12px;
+            color: #8b96a6;
+            font-size: 10px;
             font-weight: 700;
+            line-height: 1.2;
             text-transform: uppercase;
-            letter-spacing: .06em;
-            margin-bottom: 8px;
+            letter-spacing: .055em;
+            margin-bottom: 5px;
         }
 
         .company-title {
-            margin: 0 0 8px;
-            font-size: 22px;
-            font-weight: 800;
-            line-height: 1.15;
+            margin: 0;
+            color: #333c48;
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.3;
             white-space: normal;
-            word-break: break-word;
             overflow-wrap: anywhere;
         }
 
-        .meta {
-            color: #5f6f86;
-            font-size: 14px;
-            line-height: 1.45;
-            margin-bottom: 14px;
-        }
-
         .status-badge {
+            flex: 0 0 auto;
             display: inline-flex;
             align-items: center;
-            min-height: 28px;
-            padding: 6px 10px;
+            min-height: 24px;
+            padding: 4px 9px;
             border-radius: 999px;
-            background: #eef5fb;
-            color: #285680;
+            background: #eaf5fc;
+            color: #2b6f94;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        .meta {
+            color: #828b98;
             font-size: 12px;
-            font-weight: 700;
-            letter-spacing: .02em;
-            margin-bottom: 10px;
+            line-height: 1.35;
+            margin: -4px 0 12px;
         }
 
         .action {
             width: 100%;
-            min-height: 46px;
+            min-height: 40px;
             border: 0;
-            border-radius: 12px;
-            padding: 12px 14px;
-            font-size: 15px;
-            font-weight: 800;
+            border-radius: 9px;
+            padding: 9px 14px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.2;
             cursor: pointer;
             color: #fff;
-            transition: transform .12s ease, opacity .12s ease, box-shadow .12s ease;
+            transition: filter .12s ease, opacity .12s ease;
         }
 
-        .action:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(23, 32, 51, 0.14);
-        }
+        .action:hover { filter: brightness(.97); }
 
         .action:disabled {
             opacity: .6;
             cursor: wait;
-            transform: none;
-            box-shadow: none;
+            filter: none;
         }
 
-        .action.close { background: #18a8e1; }
-        .action.delete { background: #e9505b; }
+        .action.close { background: #2fc6f6; }
+        .action.delete { background: #e95b63; }
 
         .message {
-            margin-top: 12px;
-            padding: 11px 12px;
-            border-radius: 12px;
-            background: #f4f7fb;
-            color: #526077;
-            font-size: 13px;
-            line-height: 1.45;
+            margin-top: 10px;
+            padding: 9px 11px;
+            border-radius: 9px;
+            background: #f4f7f9;
+            color: #687482;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
         .message.error {
-            background: #fff1f1;
-            color: #9d3030;
+            background: #fff0f0;
+            color: #a23636;
         }
 
         .message.success {
@@ -125,39 +138,32 @@
             color: #277247;
         }
 
-        .loading-card,
-        .empty-card,
-        .error-card {
-            text-align: center;
-        }
+        .center-card { text-align: center; }
 
-        .loading-title,
-        .empty-title,
-        .error-title {
-            margin: 0 0 8px;
-            font-size: 18px;
-            font-weight: 800;
-            line-height: 1.25;
+        .state-title {
+            margin: 0 0 7px;
+            color: #333c48;
+            font-size: 15px;
+            font-weight: 600;
+            line-height: 1.3;
         }
 
         .spinner {
-            width: 22px;
-            height: 22px;
-            margin: 8px auto 14px;
+            width: 20px;
+            height: 20px;
+            margin: 5px auto 11px;
             border: 3px solid #dce7ef;
-            border-top-color: #18a8e1;
+            border-top-color: #2fc6f6;
             border-radius: 50%;
             animation: spin .8s linear infinite;
         }
 
         .loading-text {
-            color: #6b778c;
-            font-size: 14px;
+            color: #828b98;
+            font-size: 12px;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -178,10 +184,10 @@
 
     function renderLoading() {
         root.innerHTML = `
-            <section class="widget-card loading-card">
+            <section class="widget-card center-card">
                 <div class="spinner"></div>
-                <div class="loading-title">Загружаю обращение…</div>
-                <div class="loading-text">Секунду, получаю статус и доступные действия.</div>
+                <div class="state-title">Загружаю обращение…</div>
+                <div class="loading-text">Получаю статус и доступные действия.</div>
             </section>`;
         resize('LOADING');
     }
@@ -236,9 +242,9 @@
         const ticket = context.ticket;
         if (!ticket) {
             root.innerHTML = `
-                <section class="widget-card empty-card">
+                <section class="widget-card center-card">
                     <div class="eyebrow">B24 Support</div>
-                    <div class="empty-title">Нет активного обращения</div>
+                    <div class="state-title">Нет активного обращения</div>
                     <div class="message">${escapeHtml(context.message)}</div>
                 </section>`;
             resize('EMPTY');
@@ -248,15 +254,24 @@
         const button = context.available && context.buttonLabel
             ? `<button id="actionButton" class="action ${context.action === 'DELETE' ? 'delete' : 'close'}" type="button">${escapeHtml(context.buttonLabel)}</button>`
             : '';
+
+        // Обычное пояснение backend не выводим постоянно: в компактном виджете
+        // показываем сообщение только после выполненного действия или при ошибке.
         const feedback = message
             ? `<div class="message ${messageType || ''}">${escapeHtml(message)}</div>`
-            : `<div class="message">${escapeHtml(context.message)}</div>`;
+            : (!context.available && context.message
+                ? `<div class="message">${escapeHtml(context.message)}</div>`
+                : '');
 
         root.innerHTML = `
             <section class="widget-card">
-                <div class="eyebrow">Обращение #${escapeHtml(ticket.id)}</div>
-                <h1 class="company-title">${escapeHtml(ticket.clientTitle || ticket.chatTitle)}</h1>
-                <div class="status-badge">Статус: ${escapeHtml(ticket.status)}</div>
+                <div class="header-row">
+                    <div class="title-block">
+                        <div class="eyebrow">Обращение #${escapeHtml(ticket.id)}</div>
+                        <h1 class="company-title">${escapeHtml(ticket.clientTitle || ticket.chatTitle)}</h1>
+                    </div>
+                    <div class="status-badge">${escapeHtml(ticket.status)}</div>
+                </div>
                 <div class="meta">Сотрудник: ${escapeHtml(context.currentUserName)}</div>
                 ${button}
                 ${feedback}
@@ -295,9 +310,9 @@
 
     function renderError(message) {
         root.innerHTML = `
-            <section class="widget-card error-card">
+            <section class="widget-card center-card">
                 <div class="eyebrow">B24 Support</div>
-                <div class="error-title">Действие недоступно</div>
+                <div class="state-title">Действие недоступно</div>
                 <div class="message error">${escapeHtml(message)}</div>
             </section>`;
         resize('ERROR');
@@ -307,12 +322,13 @@
         const applySize = () => {
             const scrollSize = typeof BX24.getScrollSize === 'function'
                 ? BX24.getScrollSize()
-                : { scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight };
+                : {
+                    scrollWidth: document.documentElement.scrollWidth,
+                    scrollHeight: document.documentElement.scrollHeight
+                };
 
-            const width = Math.max(500, Number(scrollSize.scrollWidth || 0) + 8);
-            const minHeight = state === 'OPEN' ? 255
-                : state === 'CLOSED' ? 225
-                    : 175;
+            const width = 500;
+            const minHeight = state === 'OPEN' || state === 'CLOSED' ? 175 : 145;
             const height = Math.max(minHeight, Number(scrollSize.scrollHeight || 0) + 8);
 
             if (typeof BX24.resizeWindow === 'function') {
@@ -323,8 +339,6 @@
             }
         };
 
-        // The IM_TEXTAREA container is created by Bitrix24. Give it one render frame
-        // before measuring the card, then repeat after fonts/layout have settled.
         window.requestAnimationFrame(applySize);
         window.setTimeout(applySize, 120);
     }
