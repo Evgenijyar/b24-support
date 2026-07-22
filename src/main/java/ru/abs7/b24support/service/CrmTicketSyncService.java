@@ -77,6 +77,8 @@ public class CrmTicketSyncService {
         try {
             if (ticket.getCrmItemId() == null) {
                 createCrmItem(ticket, config, admin);
+            } else if (shouldRetryClientBinding(ticket)) {
+                syncClientBinding(ticket, admin);
             }
             if (ticket.getCrmItemId() != null && isLocallyClosed(ticket) && ticket.getCrmClosedAt() == null) {
                 moveToClosedStage(ticket, config, admin);
@@ -116,7 +118,7 @@ public class CrmTicketSyncService {
             return;
         }
 
-        if (ticket.getCrmItemId() == null) {
+        if (ticket.getCrmItemId() == null || shouldRetryClientBinding(ticket)) {
             syncTicket(ticket);
         }
         if (ticket.getCrmItemId() == null) {
@@ -184,16 +186,14 @@ public class CrmTicketSyncService {
     private void createCrmItem(SupportTicket ticket,
                                CrmIntegrationConfig config,
                                PortalInstallation admin) {
-        CompanyResolution company = resolveCompanyByPhone(admin, ticket.getClientInstallation().getClientPhone());
+        ClientResolution client = resolveClientByPhone(admin, ticket.getClientInstallation().getClientPhone());
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("title", ticket.getChatTitle());
         fields.put("categoryId", config.getCategoryId());
         fields.put("stageId", isLocallyClosed(ticket) ? config.getClosedStageId() : config.getOpenStageId());
         fields.put("assignedById", parseUserId(config.getResponsibleUserId()));
-        if (company.companyId() != null) {
-            fields.put("companyId", company.companyId());
-        }
+        addClientFields(fields, client);
 
         JsonNode root = bitrixRestClient.callJson(
                 admin.getWebhookUrl(),
@@ -217,53 +217,201 @@ public class CrmTicketSyncService {
                 itemId,
                 config.getEntityTypeId(),
                 config.getCategoryId(),
-                company.companyId(),
-                company.status()
+                client.companyId(),
+                client.contactId(),
+                client.status()
         );
         if (isLocallyClosed(ticket)) {
             ticket.markCrmClosed();
         }
         ticketRepository.save(ticket);
+        logClientResolution(ticket, client, "CRM item created");
     }
 
-    private CompanyResolution resolveCompanyByPhone(PortalInstallation admin, String phone) {
+    private void syncClientBinding(SupportTicket ticket, PortalInstallation admin) {
+        ClientResolution client = resolveClientByPhone(admin, ticket.getClientInstallation().getClientPhone());
+        Map<String, Object> fields = new LinkedHashMap<>();
+        addClientFields(fields, client);
+
+        if (!fields.isEmpty()) {
+            bitrixRestClient.callJson(
+                    admin.getWebhookUrl(),
+                    "crm.item.update",
+                    Map.of(
+                            "entityTypeId", ticket.getCrmEntityTypeId(),
+                            "id", ticket.getCrmItemId(),
+                            "fields", fields
+                    )
+            );
+        }
+
+        ticket.markCrmClientResolved(client.companyId(), client.contactId(), client.status());
+        ticketRepository.save(ticket);
+        logClientResolution(ticket, client, fields.isEmpty() ? "CRM client not matched" : "CRM client binding updated");
+    }
+
+    private ClientResolution resolveClientByPhone(PortalInstallation admin, String phone) {
         if (phone == null || phone.isBlank()) {
-            return new CompanyResolution(null, CrmCompanyMatchStatus.NOT_FOUND, "Телефон клиента не заполнен");
+            return new ClientResolution(null, null, CrmCompanyMatchStatus.NOT_FOUND,
+                    "Телефон клиента не заполнен");
+        }
+
+        Set<Long> contactIds = new LinkedHashSet<>();
+        Set<Long> companyIds = new LinkedHashSet<>();
+        StringBuilder warning = new StringBuilder();
+        int failedSearches = 0;
+
+        try {
+            contactIds.addAll(findIdsByPhone(admin, phone, "CONTACT"));
+        } catch (RuntimeException e) {
+            failedSearches++;
+            appendWarning(warning, "поиск контакта завершился ошибкой: " + safeError(e, "ошибка Bitrix24"));
         }
 
         try {
-            JsonNode root = bitrixRestClient.callJson(
-                    admin.getWebhookUrl(),
-                    "crm.duplicate.findbycomm",
-                    Map.of(
-                            "entity_type", "COMPANY",
-                            "type", "PHONE",
-                            "values", List.of(phone)
-                    )
-            );
-            JsonNode companies = root.path("result").path("COMPANY");
-            Set<Long> ids = new LinkedHashSet<>();
-            if (companies.isArray()) {
-                for (JsonNode node : companies) {
-                    Long id = extractLong(node);
-                    if (id != null) {
-                        ids.add(id);
-                    }
+            companyIds.addAll(findIdsByPhone(admin, phone, "COMPANY"));
+        } catch (RuntimeException e) {
+            failedSearches++;
+            appendWarning(warning, "поиск компании завершился ошибкой: " + safeError(e, "ошибка Bitrix24"));
+        }
+
+        if (failedSearches == 2) {
+            return new ClientResolution(null, null, CrmCompanyMatchStatus.ERROR, warning.toString());
+        }
+
+        Long contactId = contactIds.size() == 1 ? contactIds.iterator().next() : null;
+        Long companyId = companyIds.size() == 1 ? companyIds.iterator().next() : null;
+
+        if (contactIds.size() > 1) {
+            appendWarning(warning, "по телефону найдено несколько контактов: " + new ArrayList<>(contactIds));
+        }
+        if (companyIds.size() > 1) {
+            appendWarning(warning, "по телефону найдено несколько компаний: " + new ArrayList<>(companyIds));
+        }
+
+        if (contactId != null) {
+            try {
+                ContactCompanies linked = resolveContactCompanies(admin, contactId);
+                if (linked.primaryCompanyId() != null) {
+                    companyId = linked.primaryCompanyId();
+                } else if (companyId == null && linked.companyIds().size() == 1) {
+                    companyId = linked.companyIds().iterator().next();
+                } else if (linked.companyIds().size() > 1) {
+                    appendWarning(warning,
+                            "контакт " + contactId + " связан с несколькими компаниями: "
+                                    + new ArrayList<>(linked.companyIds()));
+                }
+            } catch (RuntimeException e) {
+                appendWarning(warning,
+                        "контакт найден, но его компании получить не удалось: "
+                                + safeError(e, "ошибка Bitrix24"));
+            }
+        }
+
+        if (contactId != null || companyId != null) {
+            return new ClientResolution(companyId, contactId, CrmCompanyMatchStatus.MATCHED,
+                    warning.isEmpty() ? null : warning.toString());
+        }
+        if (!contactIds.isEmpty() || !companyIds.isEmpty()) {
+            return new ClientResolution(null, null, CrmCompanyMatchStatus.MULTIPLE_FOUND,
+                    warning.isEmpty() ? "По телефону найдено несколько CRM-клиентов" : warning.toString());
+        }
+        return new ClientResolution(null, null, CrmCompanyMatchStatus.NOT_FOUND,
+                warning.isEmpty() ? "По телефону не найдено ни контакта, ни компании" : warning.toString());
+    }
+
+    private Set<Long> findIdsByPhone(PortalInstallation admin, String phone, String entityType) {
+        JsonNode root = bitrixRestClient.callJson(
+                admin.getWebhookUrl(),
+                "crm.duplicate.findbycomm",
+                Map.of(
+                        "entity_type", entityType,
+                        "type", "PHONE",
+                        "values", List.of(phone)
+                )
+        );
+        JsonNode result = root.path("result");
+        if (result.isArray()) {
+            // Некоторые порталы возвращают пустой результат как [],
+            // несмотря на документированный объект {"CONTACT": [...]}.
+            return extractIds(result);
+        }
+        return extractIds(result.path(entityType));
+    }
+
+    private ContactCompanies resolveContactCompanies(PortalInstallation admin, Long contactId) {
+        JsonNode root = bitrixRestClient.callJson(
+                admin.getWebhookUrl(),
+                "crm.contact.company.items.get",
+                Map.of("id", contactId)
+        );
+
+        Set<Long> companyIds = new LinkedHashSet<>();
+        Long primaryCompanyId = null;
+        JsonNode result = root.path("result");
+        if (result.isArray()) {
+            for (JsonNode binding : result) {
+                Long companyId = extractLong(binding.path("COMPANY_ID"));
+                if (companyId == null) {
+                    companyId = extractLong(binding.path("companyId"));
+                }
+                if (companyId == null) {
+                    continue;
+                }
+                companyIds.add(companyId);
+                String primary = binding.path("IS_PRIMARY").asText(
+                        binding.path("isPrimary").asText("N")
+                );
+                if ("Y".equalsIgnoreCase(primary)) {
+                    primaryCompanyId = companyId;
                 }
             }
-
-            if (ids.size() == 1) {
-                return new CompanyResolution(ids.iterator().next(), CrmCompanyMatchStatus.MATCHED, null);
-            }
-            if (ids.isEmpty()) {
-                return new CompanyResolution(null, CrmCompanyMatchStatus.NOT_FOUND, "Компания по телефону не найдена");
-            }
-            return new CompanyResolution(null, CrmCompanyMatchStatus.MULTIPLE_FOUND,
-                    "По телефону найдено несколько компаний: " + new ArrayList<>(ids));
-        } catch (RuntimeException e) {
-            return new CompanyResolution(null, CrmCompanyMatchStatus.ERROR,
-                    "Поиск компании по телефону завершился ошибкой: " + safeError(e, "ошибка Bitrix24"));
         }
+        return new ContactCompanies(companyIds, primaryCompanyId);
+    }
+
+    private void addClientFields(Map<String, Object> fields, ClientResolution client) {
+        if (client.companyId() != null) {
+            fields.put("companyId", client.companyId());
+        }
+        if (client.contactId() != null) {
+            fields.put("contactId", client.contactId());
+            fields.put("contactIds", List.of(client.contactId()));
+        }
+    }
+
+    private Set<Long> extractIds(JsonNode nodes) {
+        Set<Long> ids = new LinkedHashSet<>();
+        if (nodes != null && nodes.isArray()) {
+            for (JsonNode node : nodes) {
+                Long id = extractLong(node);
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+        }
+        return ids;
+    }
+
+    private void appendWarning(StringBuilder warning, String value) {
+        if (!warning.isEmpty()) {
+            warning.append("; ");
+        }
+        warning.append(value);
+    }
+
+    private boolean shouldRetryClientBinding(SupportTicket ticket) {
+        return ticket.getCrmItemId() != null
+                && ticket.getCrmCompanyId() == null
+                && ticket.getCrmContactId() == null
+                && (ticket.getCrmSyncStatus() != CrmSyncStatus.SYNCED
+                    || ticket.getCrmCompanyMatchStatus() == CrmCompanyMatchStatus.NOT_FOUND);
+    }
+
+    private void logClientResolution(SupportTicket ticket, ClientResolution client, String action) {
+        LOG.info("{}: ticketId={}, crmItemId={}, companyId={}, contactId={}, status={}, warning={}",
+                action, ticket.getId(), ticket.getCrmItemId(), client.companyId(), client.contactId(),
+                client.status(), client.warning());
     }
 
     private void moveToClosedStage(SupportTicket ticket,
@@ -352,10 +500,17 @@ public class CrmTicketSyncService {
         return value == null ? "" : value.trim();
     }
 
-    private record CompanyResolution(
+    private record ClientResolution(
             Long companyId,
+            Long contactId,
             CrmCompanyMatchStatus status,
             String warning
+    ) {
+    }
+
+    private record ContactCompanies(
+            Set<Long> companyIds,
+            Long primaryCompanyId
     ) {
     }
 }

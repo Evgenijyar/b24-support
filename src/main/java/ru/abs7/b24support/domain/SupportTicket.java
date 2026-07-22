@@ -80,6 +80,9 @@ public class SupportTicket {
     @Column(name = "crm_company_id")
     private Long crmCompanyId;
 
+    @Column(name = "crm_contact_id")
+    private Long crmContactId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "crm_company_match_status", length = 32)
     private CrmCompanyMatchStatus crmCompanyMatchStatus;
@@ -195,15 +198,29 @@ public class SupportTicket {
                                Integer entityTypeId,
                                Integer categoryId,
                                Long companyId,
+                               Long contactId,
                                CrmCompanyMatchStatus companyMatchStatus) {
         this.crmItemId = crmItemId;
         this.crmEntityTypeId = entityTypeId;
         this.crmCategoryId = categoryId;
         this.crmCompanyId = companyId;
+        this.crmContactId = contactId;
         this.crmCompanyMatchStatus = companyMatchStatus;
         this.crmSyncStatus = CrmSyncStatus.SYNCED;
         this.crmLastError = null;
         this.crmCreatedAt = OffsetDateTime.now();
+        touch();
+    }
+
+
+    public void markCrmClientResolved(Long companyId,
+                                      Long contactId,
+                                      CrmCompanyMatchStatus matchStatus) {
+        this.crmCompanyId = companyId;
+        this.crmContactId = contactId;
+        this.crmCompanyMatchStatus = matchStatus;
+        this.crmSyncStatus = CrmSyncStatus.SYNCED;
+        this.crmLastError = null;
         touch();
     }
 
@@ -247,6 +264,7 @@ public class SupportTicket {
     public Integer getCrmEntityTypeId() { return crmEntityTypeId; }
     public Integer getCrmCategoryId() { return crmCategoryId; }
     public Long getCrmCompanyId() { return crmCompanyId; }
+    public Long getCrmContactId() { return crmContactId; }
     public CrmCompanyMatchStatus getCrmCompanyMatchStatus() { return crmCompanyMatchStatus; }
     public CrmSyncStatus getCrmSyncStatus() { return crmSyncStatus; }
     public String getCrmLastError() { return crmLastError; }
