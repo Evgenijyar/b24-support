@@ -97,6 +97,11 @@ public class CrmTicketSyncService {
         if (message.getCrmTimelineCommentId() != null || message.getCrmSyncStatus() == CrmSyncStatus.SYNCED) {
             return;
         }
+        if (isTechnicalSystemMessage(message)) {
+            message.markCrmSkipped("Технические сообщения системы не добавляются в таймлайн CRM");
+            messageRepository.save(message);
+            return;
+        }
         SupportTicket ticket = message.getSupportTicket();
         if (ticket == null) {
             message.markCrmSkipped("Сообщение не связано с обращением");
@@ -285,6 +290,10 @@ public class CrmTicketSyncService {
         return configRepository.findByAdminPortal_Id(admin.getId())
                 .filter(CrmIntegrationConfig::isEnabled)
                 .orElse(null);
+    }
+
+    private boolean isTechnicalSystemMessage(SupportMessage message) {
+        return "SYSTEM_TO_CLIENT".equalsIgnoreCase(safe(message.getDirection()));
     }
 
     private String buildTimelineComment(SupportMessage message) {

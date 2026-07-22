@@ -121,7 +121,7 @@ public class BitrixRestClient {
                         safeEndpoint,
                         safeRequestBody,
                         maskSecrets(responseBody));
-                throw new BitrixRestException("Bitrix24 вернул HTTP " + response.statusCode());
+                throw new BitrixRestException(resolveHttpErrorMessage(response.statusCode(), responseBody));
             }
 
             JsonNode root = objectMapper.readTree(responseBody);
@@ -176,6 +176,31 @@ public class BitrixRestClient {
                     e);
             throw new BitrixRestException("Не удалось обработать JSON-ответ Bitrix24", e);
         }
+    }
+
+
+
+    private String resolveHttpErrorMessage(int statusCode, String responseBody) {
+        try {
+            JsonNode errorRoot = objectMapper.readTree(responseBody == null ? "" : responseBody);
+            String errorCode = errorRoot.path("error").asText("");
+            String description = errorRoot.path("error_description").asText("");
+
+            if ("insufficient_scope".equalsIgnoreCase(errorCode)) {
+                return "Webhook админского Bitrix24 не имеет права CRM. "
+                        + "Откройте Разработчикам → Интеграции, отредактируйте используемый входящий webhook "
+                        + "и добавьте разрешение CRM (scope crm), затем сохраните webhook.";
+            }
+            if (!description.isBlank()) {
+                return "Bitrix24: " + description;
+            }
+            if (!errorCode.isBlank()) {
+                return "Bitrix24: " + errorCode;
+            }
+        } catch (Exception ignored) {
+            // Если Bitrix24 вернул не JSON, оставляем универсальное сообщение ниже.
+        }
+        return "Bitrix24 вернул HTTP " + statusCode;
     }
 
 
