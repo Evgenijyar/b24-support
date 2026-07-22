@@ -241,3 +241,26 @@ button, input, select { font: inherit; }
 }
 .modal-action-panel.d-none { display: none !important; }
 .client-action-strip .button-row, .modal-action-panel .button-row { flex-shrink: 0; }
+
+.crm-integration-card {
+    margin-top: 16px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border: 1px solid rgba(168, 199, 250, 0.18);
+    border-radius: var(--radius-lg);
+    background: rgba(168, 199, 250, 0.055);
+}
+.crm-integration-card h3 { margin: 4px 0 8px; font-size: 1rem; }
+.crm-integration-card p { margin: 6px 0 0; color: var(--text-secondary); max-width: 720px; }
+.crm-config-summary { display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--text-secondary); font-size: 0.82rem; }
+.crm-config-summary b { color: var(--text-primary); font-weight: 600; }
+.crm-modal-card { width: min(760px, 100%); }
+.crm-wizard-step { min-height: 150px; }
+.crm-wizard-loading { margin-bottom: 14px; padding: 11px 13px; border-radius: var(--radius-md); background: var(--bg-surface); color: var(--text-secondary); }
+
+@media (max-width: 780px) {
+    .crm-integration-card { align-items: flex-start; flex-direction: column; }
+}

@@ -1,5 +1,6 @@
 package ru.abs7.b24support.api.dto.client;
 
+import ru.abs7.b24support.domain.CrmSyncStatus;
 import ru.abs7.b24support.domain.SupportMessage;
 import java.time.OffsetDateTime;
 
@@ -17,6 +18,10 @@ public record SupportMessageResponse(
         String senderName,
         String text,
         String status,
+        Long crmTimelineCommentId,
+        CrmSyncStatus crmSyncStatus,
+        String crmLastError,
+        OffsetDateTime crmSyncedAt,
         OffsetDateTime createdAt
 ) {
     public static SupportMessageResponse from(SupportMessage message) {
@@ -35,6 +40,10 @@ public record SupportMessageResponse(
                 message.getSenderName(),
                 message.getText(),
                 message.getStatus(),
+                message.getCrmTimelineCommentId(),
+                message.getCrmSyncStatus(),
+                message.getCrmLastError(),
+                message.getCrmSyncedAt(),
                 message.getCreatedAt()
         );
     }

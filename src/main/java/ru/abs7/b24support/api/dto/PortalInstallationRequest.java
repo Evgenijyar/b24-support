@@ -24,6 +24,9 @@ public record PortalInstallationRequest(
         @Size(max = 255, message = "member_id не должен быть длиннее 255 символов")
         String memberId,
 
+        @Size(max = 64, message = "Телефон клиента слишком длинный")
+        String clientPhone,
+
         @Size(max = 2048, message = "Webhook URL слишком длинный")
         String webhookUrl,
 

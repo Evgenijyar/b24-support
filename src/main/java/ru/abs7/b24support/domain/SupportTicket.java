@@ -32,6 +32,9 @@ public class SupportTicket {
     @Column(name = "client_dialog_id", nullable = false, length = 255)
     private String clientDialogId;
 
+    @Column(name = "client_sequence_number", nullable = false)
+    private Long clientSequenceNumber;
+
     @Column(name = "admin_chat_id", length = 64)
     private String adminChatId;
 
@@ -65,6 +68,35 @@ public class SupportTicket {
     @Column(name = "last_error", columnDefinition = "text")
     private String lastError;
 
+    @Column(name = "crm_item_id")
+    private Long crmItemId;
+
+    @Column(name = "crm_entity_type_id")
+    private Integer crmEntityTypeId;
+
+    @Column(name = "crm_category_id")
+    private Integer crmCategoryId;
+
+    @Column(name = "crm_company_id")
+    private Long crmCompanyId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "crm_company_match_status", length = 32)
+    private CrmCompanyMatchStatus crmCompanyMatchStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "crm_sync_status", nullable = false, length = 32)
+    private CrmSyncStatus crmSyncStatus;
+
+    @Column(name = "crm_last_error", columnDefinition = "text")
+    private String crmLastError;
+
+    @Column(name = "crm_created_at")
+    private OffsetDateTime crmCreatedAt;
+
+    @Column(name = "crm_closed_at")
+    private OffsetDateTime crmClosedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -74,12 +106,15 @@ public class SupportTicket {
     protected SupportTicket() {
     }
 
-    public SupportTicket(PortalInstallation clientInstallation, String clientDialogId, String chatTitle) {
+    public SupportTicket(PortalInstallation clientInstallation, String clientDialogId, String chatTitle, Long clientSequenceNumber) {
         OffsetDateTime now = OffsetDateTime.now();
         this.clientInstallation = clientInstallation;
         this.clientDialogId = clientDialogId;
+        this.clientSequenceNumber = clientSequenceNumber;
         this.chatTitle = chatTitle;
         this.status = SupportTicketStatus.OPENING;
+        this.crmSyncStatus = CrmSyncStatus.PENDING;
+        this.crmCompanyMatchStatus = CrmCompanyMatchStatus.NOT_ATTEMPTED;
         this.openedAt = now;
         this.createdAt = now;
         this.updatedAt = now;
@@ -138,6 +173,56 @@ public class SupportTicket {
         }
     }
 
+
+    public void updateChatTitle(String chatTitle) {
+        this.chatTitle = chatTitle;
+        touch();
+    }
+
+    public void markCrmNotConfigured() {
+        this.crmSyncStatus = CrmSyncStatus.NOT_CONFIGURED;
+        this.crmLastError = null;
+        touch();
+    }
+
+    public void markCrmPending(String error) {
+        this.crmSyncStatus = CrmSyncStatus.PENDING;
+        this.crmLastError = error;
+        touch();
+    }
+
+    public void markCrmCreated(Long crmItemId,
+                               Integer entityTypeId,
+                               Integer categoryId,
+                               Long companyId,
+                               CrmCompanyMatchStatus companyMatchStatus) {
+        this.crmItemId = crmItemId;
+        this.crmEntityTypeId = entityTypeId;
+        this.crmCategoryId = categoryId;
+        this.crmCompanyId = companyId;
+        this.crmCompanyMatchStatus = companyMatchStatus;
+        this.crmSyncStatus = CrmSyncStatus.SYNCED;
+        this.crmLastError = null;
+        this.crmCreatedAt = OffsetDateTime.now();
+        touch();
+    }
+
+    public void markCrmError(String error, CrmCompanyMatchStatus companyMatchStatus) {
+        this.crmSyncStatus = CrmSyncStatus.ERROR;
+        this.crmLastError = error;
+        if (companyMatchStatus != null) {
+            this.crmCompanyMatchStatus = companyMatchStatus;
+        }
+        touch();
+    }
+
+    public void markCrmClosed() {
+        this.crmClosedAt = OffsetDateTime.now();
+        this.crmLastError = null;
+        this.crmSyncStatus = CrmSyncStatus.SYNCED;
+        touch();
+    }
+
     private void touch() {
         this.updatedAt = OffsetDateTime.now();
     }
@@ -146,6 +231,7 @@ public class SupportTicket {
     public PortalInstallation getClientInstallation() { return clientInstallation; }
     public SupportTicketStatus getStatus() { return status; }
     public String getClientDialogId() { return clientDialogId; }
+    public Long getClientSequenceNumber() { return clientSequenceNumber; }
     public String getAdminChatId() { return adminChatId; }
     public String getAdminDialogId() { return adminDialogId; }
     public String getChatTitle() { return chatTitle; }
@@ -157,6 +243,15 @@ public class SupportTicket {
     public String getClosedByUserName() { return closedByUserName; }
     public int getDeletionAttempts() { return deletionAttempts; }
     public String getLastError() { return lastError; }
+    public Long getCrmItemId() { return crmItemId; }
+    public Integer getCrmEntityTypeId() { return crmEntityTypeId; }
+    public Integer getCrmCategoryId() { return crmCategoryId; }
+    public Long getCrmCompanyId() { return crmCompanyId; }
+    public CrmCompanyMatchStatus getCrmCompanyMatchStatus() { return crmCompanyMatchStatus; }
+    public CrmSyncStatus getCrmSyncStatus() { return crmSyncStatus; }
+    public String getCrmLastError() { return crmLastError; }
+    public OffsetDateTime getCrmCreatedAt() { return crmCreatedAt; }
+    public OffsetDateTime getCrmClosedAt() { return crmClosedAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 }

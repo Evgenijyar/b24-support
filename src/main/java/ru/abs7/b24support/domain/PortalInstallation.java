@@ -34,6 +34,9 @@ public class PortalInstallation {
     @Column(name = "member_id", length = 255)
     private String memberId;
 
+    @Column(name = "client_phone", length = 64)
+    private String clientPhone;
+
     @Column(name = "webhook_url", columnDefinition = "text")
     private String webhookUrl;
 
@@ -141,6 +144,14 @@ public class PortalInstallation {
 
     public String getMemberId() {
         return memberId;
+    }
+
+    public String getClientPhone() {
+        return clientPhone;
+    }
+
+    public void setClientPhone(String clientPhone) {
+        this.clientPhone = clientPhone;
     }
 
     public void setMemberId(String memberId) {

@@ -67,7 +67,7 @@ public class PortalInstallationService {
                 domain
         );
 
-        applyEditableFields(installation, request);
+        applyEditableFields(installation, request, role);
         installation.setStatus(request.status() == null ? PortalStatus.DRAFT : request.status());
 
         if (installation.getStatus() == PortalStatus.ACTIVE) {
@@ -92,7 +92,7 @@ public class PortalInstallationService {
         installation.setClientCode(clientCode);
         installation.setTitle(cleanRequired(request.title()));
         installation.setDomain(domain);
-        applyEditableFields(installation, request);
+        applyEditableFields(installation, request, role);
 
         if (request.status() != null) {
             PortalStatus previous = installation.getStatus();
@@ -112,8 +112,11 @@ public class PortalInstallationService {
         repository.delete(installation);
     }
 
-    private void applyEditableFields(PortalInstallation installation, PortalInstallationRequest request) {
+    private void applyEditableFields(PortalInstallation installation,
+                                     PortalInstallationRequest request,
+                                     PortalRole role) {
         installation.setMemberId(cleanNullable(request.memberId()));
+        installation.setClientPhone(role == PortalRole.CLIENT ? normalizePhone(request.clientPhone()) : null);
         installation.setWebhookUrl(cleanNullable(request.webhookUrl()));
         installation.setBotId(cleanNullable(request.botId()));
         installation.setSupportDialogId(cleanNullable(request.supportDialogId()));
@@ -167,6 +170,26 @@ public class PortalInstallationService {
         }
 
         return "c_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+
+    private String normalizePhone(String value) {
+        String cleaned = cleanNullable(value);
+        if (cleaned == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Для клиентского портала укажи номер телефона клиента");
+        }
+
+        boolean leadingPlus = cleaned.startsWith("+");
+        String digits = cleaned.replaceAll("\\D", "");
+        if (digits.length() < 7 || digits.length() > 15) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Некорректный номер телефона клиента");
+        }
+
+        if (digits.length() == 11 && digits.startsWith("8")) {
+            digits = "7" + digits.substring(1);
+            leadingPlus = true;
+        }
+        return (leadingPlus || digits.length() >= 10 ? "+" : "") + digits;
     }
 
     private String normalizeDomain(String value) {

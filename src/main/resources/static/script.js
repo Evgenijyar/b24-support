@@ -6,7 +6,9 @@ const state = {
     adminSummary: null,
     adminUsers: [],
     clientMessages: [],
-    editingPortal: null
+    editingPortal: null,
+    crmConfig: null,
+    crmWizard: { step: 1, processes: [], categories: [], stages: [] }
 };
 
 const els = {};
@@ -43,6 +45,8 @@ function cacheElements() {
     els.portalTitle = document.getElementById('portalTitle');
     els.portalDomain = document.getElementById('portalDomain');
     els.portalWebhookUrl = document.getElementById('portalWebhookUrl');
+    els.portalClientPhoneGroup = document.getElementById('portalClientPhoneGroup');
+    els.portalClientPhone = document.getElementById('portalClientPhone');
     els.portalMemberId = document.getElementById('portalMemberId');
     els.portalStatus = document.getElementById('portalStatus');
     els.portalForm = document.getElementById('portalForm');
@@ -51,6 +55,22 @@ function cacheElements() {
     els.portalClientActions = document.getElementById('portalClientActions');
     els.btnModalClientTest = document.getElementById('btnModalClientTest');
     els.btnModalClientRegisterBot = document.getElementById('btnModalClientRegisterBot');
+
+    els.crmModal = document.getElementById('crmModal');
+    els.crmStepLabel = document.getElementById('crmStepLabel');
+    els.crmWizardLoading = document.getElementById('crmWizardLoading');
+    els.crmWizardError = document.getElementById('crmWizardError');
+    els.crmStepProcess = document.getElementById('crmStepProcess');
+    els.crmStepCategory = document.getElementById('crmStepCategory');
+    els.crmStepMapping = document.getElementById('crmStepMapping');
+    els.crmProcessSelect = document.getElementById('crmProcessSelect');
+    els.crmCategorySelect = document.getElementById('crmCategorySelect');
+    els.crmOpenStageSelect = document.getElementById('crmOpenStageSelect');
+    els.crmClosedStageSelect = document.getElementById('crmClosedStageSelect');
+    els.crmResponsibleSelect = document.getElementById('crmResponsibleSelect');
+    els.btnCrmBack = document.getElementById('btnCrmBack');
+    els.btnCrmNext = document.getElementById('btnCrmNext');
+    els.btnCrmSave = document.getElementById('btnCrmSave');
 }
 
 function bindEvents() {
@@ -92,6 +112,14 @@ function bindEvents() {
             await clientAction(portalId, 'bot/register', 'Клиентский бот создан / проверен');
         });
     }
+
+    els.portalRole.addEventListener('change', updatePortalRoleFields);
+    document.getElementById('btnCloseCrmModal').addEventListener('click', closeCrmModal);
+    els.crmModal.addEventListener('click', event => { if (event.target === els.crmModal) closeCrmModal(); });
+    els.btnCrmBack.addEventListener('click', crmWizardBack);
+    els.btnCrmNext.addEventListener('click', crmWizardNext);
+    els.btnCrmSave.addEventListener('click', saveCrmConfiguration);
+
     els.btnRefresh.addEventListener('click', loadAll);
 
     els.portalNavList.addEventListener('click', event => {
@@ -125,6 +153,7 @@ async function loadAll() {
 
         renderAll();
         await loadAdminUsersIfPossible(false);
+        await loadCrmConfigIfPossible(false);
     } catch (error) {
         showNotice(els.portalNotice, error.message || 'Ошибка загрузки данных', true);
     } finally {
@@ -196,7 +225,7 @@ function renderPortalCards() {
                 <div class="client-action-strip">
                     <div>
                         <div class="eyebrow mb-1">Настройка клиентского бота</div>
-                        <div class="field-hint m-0">Проверь webhook клиента и зарегистрируй бота для маршрута клиент → админский чат.</div>
+                        <div class="field-hint m-0">Проверь webhook клиента и зарегистрируй бота для маршрута клиент → отдельный чат обращения.</div>
                     </div>
                     <div class="button-row">
                         <button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить webhook</button>
@@ -208,6 +237,7 @@ function renderPortalCards() {
             <div class="portal-meta-grid">
                 <div><span>Код</span><b>${escapeHtml(portal.clientCode)}</b></div>
                 <div><span>Webhook</span><b>${portal.webhookConfigured ? 'Заполнен' : 'Не указан'}</b></div>
+                ${portal.role === 'CLIENT' ? `<div><span>Телефон клиента</span><b>${escapeHtml(portal.clientPhone || '—')}</b></div>` : ''}
                 <div><span>Bot ID</span><b>${escapeHtml(portal.botId || '—')}</b></div>
                 <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
                 <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
@@ -277,7 +307,7 @@ function renderAdminPanel() {
             <div class="info-card text-start">
                 <div class="eyebrow">Админский портал не подключён</div>
                 <h2>Добавь Bitrix24 своей компании</h2>
-                <p>После подключения можно будет загрузить сотрудников и выбрать операторов для общего чата «Техподдержка админ».</p>
+                <p>После подключения можно будет загрузить сотрудников, выбрать специалистов новых чатов и настроить смарт-процесс.</p>
                 <button class="btn btn-save" type="button" onclick="openPortalModal({ role: 'ADMIN', clientCode: 'admin', title: 'Умные продажи' })">Добавить админский портал</button>
             </div>
         `;
@@ -286,7 +316,6 @@ function renderAdminPanel() {
     }
 
     const botCreated = !!portal.botId;
-    const chatCreated = !!portal.supportDialogId;
     const supportMembers = summary.supportMembers || 0;
 
     els.adminPortalPanel.innerHTML = `
@@ -305,7 +334,7 @@ function renderAdminPanel() {
                 <div class="admin-step ${(summary.loadedUsers || 0) > 0 ? 'is-ok' : ''}"><b>2</b><span>Сотрудники</span><small>${summary.loadedUsers || 0} загружено</small></div>
                 <div class="admin-step ${supportMembers > 0 ? 'is-ok' : ''}"><b>3</b><span>Операторы</span><small>${supportMembers} выбрано</small></div>
                 <div class="admin-step ${botCreated ? 'is-ok' : ''}"><b>4</b><span>Бот</span><small>${botCreated ? 'ID ' + escapeHtml(portal.botId) : 'не создан'}</small></div>
-                <div class="admin-step ${chatCreated ? 'is-ok' : ''}"><b>5</b><span>Админский чат</span><small>${chatCreated ? escapeHtml(portal.supportDialogId) : 'не создан'}</small></div>
+                <div class="admin-step ${state.crmConfig?.configured ? 'is-ok' : ''}"><b>5</b><span>Смарт-процесс</span><small>${state.crmConfig?.configured ? escapeHtml(state.crmConfig.processTitle) : 'не настроен'}</small></div>
             </div>
 
             <div class="portal-meta-grid mt-3">
@@ -329,9 +358,25 @@ function renderAdminPanel() {
             <div class="portal-actions admin-bot-actions">
                 <button class="btn btn-save" type="button" data-admin-register-bot="${portal.id}">Создать / проверить бота</button>
                 <button class="btn btn-flat" type="button" data-admin-repair-routing="${portal.id}" ${!botCreated ? 'disabled' : ''}>Проверить маршрутизацию</button>
-                <button class="btn btn-save" type="button" data-admin-create-chat="${portal.id}" ${(!botCreated || supportMembers === 0) ? 'disabled' : ''}>Создать админский чат</button>
-                <button class="btn btn-flat" type="button" data-admin-add-chat-users="${portal.id}" ${(!botCreated || !chatCreated || supportMembers === 0) ? 'disabled' : ''}>Добавить операторов в чат</button>
-                <button class="btn btn-flat" type="button" data-admin-test-message="${portal.id}" ${(!botCreated || !chatCreated) ? 'disabled' : ''}>Отправить тест</button>
+            </div>
+            <div class="crm-integration-card">
+                <div>
+                    <div class="eyebrow">Смарт-процесс обращений</div>
+                    ${state.crmConfig?.configured ? `
+                        <h3>${escapeHtml(state.crmConfig.processTitle)}</h3>
+                        <div class="crm-config-summary">
+                            <span>Воронка: <b>${escapeHtml(state.crmConfig.categoryTitle)}</b></span>
+                            <span>В работе: <b>${escapeHtml(state.crmConfig.openStageTitle)}</b></span>
+                            <span>Завершено: <b>${escapeHtml(state.crmConfig.closedStageTitle)}</b></span>
+                            <span>Ответственный: <b>${escapeHtml(state.crmConfig.responsibleUserName)}</b></span>
+                        </div>
+                        ${state.crmConfig.lastError ? `<div class="error-panel mt-2">${escapeHtml(state.crmConfig.lastError)}</div>` : ''}
+                    ` : `<p>Выбери смарт-процесс, воронку, стадии и ответственного. После этого каждое обращение будет автоматически создавать CRM-тикет.</p>`}
+                </div>
+                <div class="button-row">
+                    <button class="btn btn-save" type="button" data-crm-setup="${portal.id}">${state.crmConfig?.configured ? 'Изменить настройки' : 'Настроить смарт-процесс'}</button>
+                    ${state.crmConfig?.configured ? `<button class="btn btn-flat" type="button" data-crm-validate="${portal.id}">Проверить интеграцию</button>` : ''}
+                </div>
             </div>
         </article>
     `;
@@ -362,8 +407,8 @@ function renderAdminUsers() {
             <div class="users-panel-head">
                 <div>
                     <div class="eyebrow">Операторы поддержки</div>
-                    <h3>Выбери сотрудников для общего чата</h3>
-                    <p>Эти сотрудники будут добавлены в общий чат «Техподдержка админ». После изменения списка нажми «Сохранить выбранных», затем «Добавить операторов в чат».</p>
+                    <h3>Выбери сотрудников для новых чатов обращений</h3>
+                    <p>Все выбранные сотрудники автоматически добавляются в каждый новый чат клиентского обращения.</p>
                 </div>
                 <button id="btnSaveSupportUsers" class="btn btn-save" type="button" data-save-support-users="${portal.id}">Сохранить выбранных</button>
             </div>
@@ -458,6 +503,16 @@ async function handlePortalCardClick(event) {
 }
 
 async function handleAdminPanelClick(event) {
+    const setupId = event.target.closest('[data-crm-setup]')?.dataset.crmSetup;
+    if (setupId) {
+        await openCrmModal(setupId);
+        return;
+    }
+    const validateId = event.target.closest('[data-crm-validate]')?.dataset.crmValidate;
+    if (validateId) {
+        await validateCrmConfiguration(validateId);
+        return;
+    }
     await handlePortalCardClick(event);
 }
 
@@ -577,6 +632,163 @@ async function saveSupportUsers(portalId) {
     }
 }
 
+
+async function loadCrmConfigIfPossible(forceRender) {
+    const portal = state.adminSummary?.adminPortal;
+    if (!portal) {
+        state.crmConfig = null;
+        return;
+    }
+    try {
+        state.crmConfig = await api(`/api/admin-portal/${portal.id}/crm/config`);
+        if (forceRender || state.page === 'admin') renderAdminPanel();
+    } catch (error) {
+        state.crmConfig = null;
+        if (forceRender) showNotice(els.adminNotice, error.message || 'Не удалось прочитать CRM-настройки', true);
+    }
+}
+
+function updatePortalRoleFields() {
+    const isClient = els.portalRole.value === 'CLIENT';
+    els.portalClientPhoneGroup.classList.toggle('d-none', !isClient);
+    els.portalClientPhone.required = isClient;
+}
+
+async function openCrmModal(portalId) {
+    state.crmWizard = { portalId, step: 1, processes: [], categories: [], stages: [] };
+    clearCrmWizardError();
+    els.crmModal.classList.remove('d-none');
+    els.crmModal.setAttribute('aria-hidden', 'false');
+    setCrmWizardLoading(true);
+    try {
+        const processes = await api(`/api/admin-portal/${portalId}/crm/processes`);
+        state.crmWizard.processes = processes || [];
+        const eligible = state.crmWizard.processes.filter(item => item.eligible);
+        if (!eligible.length) throw new Error('Нет доступных смарт-процессов со стадиями и поддержкой клиентов');
+        els.crmProcessSelect.innerHTML = eligible.map(item => `<option value="${item.entityTypeId}">${escapeHtml(item.title)}</option>`).join('');
+        if (state.crmConfig?.configured) els.crmProcessSelect.value = String(state.crmConfig.entityTypeId);
+        renderCrmWizardStep();
+    } catch (error) {
+        showCrmWizardError(error.message || 'Не удалось загрузить смарт-процессы');
+    } finally {
+        setCrmWizardLoading(false);
+    }
+}
+
+function closeCrmModal() {
+    els.crmModal.classList.add('d-none');
+    els.crmModal.setAttribute('aria-hidden', 'true');
+}
+
+async function crmWizardNext() {
+    clearCrmWizardError();
+    const portalId = state.crmWizard.portalId;
+    setCrmWizardLoading(true);
+    try {
+        if (state.crmWizard.step === 1) {
+            const entityTypeId = Number(els.crmProcessSelect.value);
+            state.crmWizard.entityTypeId = entityTypeId;
+            state.crmWizard.categories = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories`);
+            if (!state.crmWizard.categories.length) throw new Error('У выбранного смарт-процесса нет доступных воронок');
+            els.crmCategorySelect.innerHTML = state.crmWizard.categories.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+            if (state.crmConfig?.configured && Number(state.crmConfig.entityTypeId) === entityTypeId) els.crmCategorySelect.value = String(state.crmConfig.categoryId);
+            state.crmWizard.step = 2;
+        } else if (state.crmWizard.step === 2) {
+            const categoryId = Number(els.crmCategorySelect.value);
+            state.crmWizard.categoryId = categoryId;
+            state.crmWizard.stages = await api(`/api/admin-portal/${portalId}/crm/processes/${state.crmWizard.entityTypeId}/categories/${categoryId}/stages`);
+            if (!state.crmWizard.stages.length) throw new Error('В выбранной воронке не найдены стадии');
+            const processStages = state.crmWizard.stages.filter(item => item.semantics === 'PROCESS');
+            const successStages = state.crmWizard.stages.filter(item => item.semantics === 'SUCCESS');
+            const openOptions = processStages.length ? processStages : state.crmWizard.stages;
+            const closeOptions = successStages.length ? successStages : state.crmWizard.stages;
+            els.crmOpenStageSelect.innerHTML = openOptions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+            els.crmClosedStageSelect.innerHTML = closeOptions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+            els.crmResponsibleSelect.innerHTML = state.adminUsers.filter(item => item.active).map(item => `<option value="${escapeHtml(item.bitrixUserId)}">${escapeHtml(item.displayName || 'ID ' + item.bitrixUserId)}</option>`).join('');
+            if (!els.crmResponsibleSelect.options.length) throw new Error('Сначала загрузи сотрудников админского портала');
+            if (state.crmConfig?.configured && Number(state.crmConfig.categoryId) === categoryId) {
+                els.crmOpenStageSelect.value = state.crmConfig.openStageId;
+                els.crmClosedStageSelect.value = state.crmConfig.closedStageId;
+                els.crmResponsibleSelect.value = state.crmConfig.responsibleUserId;
+            }
+            state.crmWizard.step = 3;
+        }
+        renderCrmWizardStep();
+    } catch (error) {
+        showCrmWizardError(error.message || 'Не удалось перейти к следующему шагу');
+    } finally {
+        setCrmWizardLoading(false);
+    }
+}
+
+function crmWizardBack() {
+    if (state.crmWizard.step > 1) state.crmWizard.step -= 1;
+    clearCrmWizardError();
+    renderCrmWizardStep();
+}
+
+function renderCrmWizardStep() {
+    const step = state.crmWizard.step;
+    els.crmStepLabel.textContent = `Шаг ${step} из 3`;
+    els.crmStepProcess.classList.toggle('d-none', step !== 1);
+    els.crmStepCategory.classList.toggle('d-none', step !== 2);
+    els.crmStepMapping.classList.toggle('d-none', step !== 3);
+    els.btnCrmBack.classList.toggle('d-none', step === 1);
+    els.btnCrmNext.classList.toggle('d-none', step === 3);
+    els.btnCrmSave.classList.toggle('d-none', step !== 3);
+}
+
+async function saveCrmConfiguration() {
+    clearCrmWizardError();
+    setCrmWizardLoading(true);
+    try {
+        const payload = {
+            entityTypeId: state.crmWizard.entityTypeId,
+            categoryId: state.crmWizard.categoryId,
+            openStageId: els.crmOpenStageSelect.value,
+            closedStageId: els.crmClosedStageSelect.value,
+            responsibleUserId: els.crmResponsibleSelect.value
+        };
+        state.crmConfig = await api(`/api/admin-portal/${state.crmWizard.portalId}/crm/config`, { method: 'PUT', body: JSON.stringify(payload) });
+        closeCrmModal();
+        renderAdminPanel();
+        showNotice(els.adminNotice, 'Интеграция со смарт-процессом сохранена', false);
+    } catch (error) {
+        showCrmWizardError(error.message || 'Не удалось сохранить CRM-интеграцию');
+    } finally {
+        setCrmWizardLoading(false);
+    }
+}
+
+async function validateCrmConfiguration(portalId) {
+    setLoading(true);
+    try {
+        const result = await api(`/api/admin-portal/${portalId}/crm/config/validate`, { method: 'POST' });
+        state.crmConfig = result.config;
+        renderAdminPanel();
+        showNotice(els.adminNotice, result.message, !result.success);
+    } catch (error) {
+        showNotice(els.adminNotice, error.message || 'Не удалось проверить CRM-интеграцию', true);
+    } finally {
+        setLoading(false);
+    }
+}
+
+function setCrmWizardLoading(loading) {
+    els.crmWizardLoading.classList.toggle('d-none', !loading);
+    [els.btnCrmBack, els.btnCrmNext, els.btnCrmSave].forEach(button => button.disabled = loading);
+}
+
+function showCrmWizardError(message) {
+    els.crmWizardError.textContent = message;
+    els.crmWizardError.classList.remove('d-none');
+}
+
+function clearCrmWizardError() {
+    els.crmWizardError.textContent = '';
+    els.crmWizardError.classList.add('d-none');
+}
+
 function setActivePage(page) {
     state.page = page;
     document.querySelectorAll('.page-section').forEach(section => section.classList.add('d-none'));
@@ -602,8 +814,10 @@ function openPortalModal(portal = {}) {
     els.portalTitle.value = portal.title || '';
     els.portalDomain.value = portal.domain || '';
     els.portalWebhookUrl.value = portal.webhookUrl || '';
+    els.portalClientPhone.value = portal.clientPhone || '';
     els.portalMemberId.value = portal.memberId || '';
     els.portalStatus.value = portal.status || 'DRAFT';
+    updatePortalRoleFields();
 
     const showClientActions = Boolean(portal.id && portal.role === 'CLIENT');
     if (els.portalClientActions) {
@@ -636,12 +850,18 @@ async function savePortalFromForm(event) {
     setLoading(true);
 
     const id = els.portalId.value;
+    if (els.portalRole.value === 'CLIENT' && !els.portalClientPhone.value.trim()) {
+        showFormError('Для клиентского портала обязательно укажи телефон клиента');
+        setLoading(false);
+        return;
+    }
     const payload = {
         role: els.portalRole.value,
         clientCode: valueOrNull(els.portalClientCode.value),
         title: els.portalTitle.value.trim(),
         domain: els.portalDomain.value.trim(),
         webhookUrl: valueOrNull(els.portalWebhookUrl.value),
+        clientPhone: valueOrNull(els.portalClientPhone.value),
         memberId: valueOrNull(els.portalMemberId.value),
         status: els.portalStatus.value
     };

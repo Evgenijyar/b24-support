@@ -50,6 +50,8 @@ class SupportTicketServiceTest {
     private SupportSettingsService settingsService;
     @Mock
     private BitrixRestClient bitrixRestClient;
+    @Mock
+    private CrmTicketSyncService crmTicketSyncService;
 
     private SupportTicketService service;
     private ObjectMapper objectMapper;
@@ -62,7 +64,8 @@ class SupportTicketServiceTest {
                 bitrixUserRepository,
                 supportMessageRepository,
                 settingsService,
-                bitrixRestClient
+                bitrixRestClient,
+                crmTicketSyncService
         );
         objectMapper = new ObjectMapper();
     }
@@ -78,6 +81,7 @@ class SupportTicketServiceTest {
         when(ticketRepository.findFirstByClientInstallation_IdAndStatusInOrderByIdDesc(eq(10L), any()))
                 .thenReturn(Optional.empty());
         when(portalRepository.findFirstByRoleOrderByIdAsc(PortalRole.ADMIN)).thenReturn(Optional.of(admin));
+        when(ticketRepository.findFirstByClientInstallation_IdOrderByClientSequenceNumberDesc(10L)).thenReturn(Optional.empty());
         when(bitrixUserRepository.findAllByPortalInstallationIdAndSupportMemberTrueOrderByLastNameAscFirstNameAscIdAsc(1L))
                 .thenReturn(List.of(first, second, inactive));
         when(ticketRepository.saveAndFlush(any(SupportTicket.class))).thenAnswer(invocation -> {
@@ -97,13 +101,13 @@ class SupportTicketServiceTest {
         assertThat(resolution.ticket().getStatus()).isEqualTo(SupportTicketStatus.OPEN);
         assertThat(resolution.ticket().getAdminChatId()).isEqualTo("77");
         assertThat(resolution.ticket().getAdminDialogId()).isEqualTo("chat77");
-        assertThat(resolution.ticket().getChatTitle()).isEqualTo("ООО Ромашка");
+        assertThat(resolution.ticket().getChatTitle()).isEqualTo("ООО Ромашка, обращение №1");
 
         ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
         verify(bitrixRestClient).callJson(eq(admin.getWebhookUrl()), eq("imbot.v2.Chat.add"), payloadCaptor.capture());
         Map<?, ?> payload = (Map<?, ?>) payloadCaptor.getValue();
         Map<?, ?> fields = (Map<?, ?>) payload.get("fields");
-        assertThat(fields.get("title")).isEqualTo("ООО Ромашка");
+        assertThat(fields.get("title")).isEqualTo("ООО Ромашка, обращение №1");
         assertThat(fields.get("userIds")).isEqualTo(List.of(101, 102));
     }
 
@@ -209,7 +213,7 @@ class SupportTicketServiceTest {
     }
 
     private SupportTicket openTicket(PortalInstallation client, Long id, String adminDialogId) {
-        SupportTicket ticket = new SupportTicket(client, "chat900", client.getTitle());
+        SupportTicket ticket = new SupportTicket(client, "chat900", client.getTitle() + ", обращение №1", 1L);
         ReflectionTestUtils.setField(ticket, "id", id);
         ticket.markOpen(adminDialogId.substring("chat".length()), adminDialogId);
         return ticket;

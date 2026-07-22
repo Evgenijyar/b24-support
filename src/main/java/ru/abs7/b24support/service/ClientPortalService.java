@@ -46,6 +46,7 @@ public class ClientPortalService {
     private final SupportMessageRepository supportMessageRepository;
     private final SupportTicketService supportTicketService;
     private final BitrixRestClient bitrixRestClient;
+    private final CrmTicketSyncService crmTicketSyncService;
     private final ObjectMapper objectMapper;
     private final String publicBaseUrl;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -54,12 +55,14 @@ public class ClientPortalService {
                                SupportMessageRepository supportMessageRepository,
                                SupportTicketService supportTicketService,
                                BitrixRestClient bitrixRestClient,
+                               CrmTicketSyncService crmTicketSyncService,
                                ObjectMapper objectMapper,
                                @Value("${app.public-base-url}") String publicBaseUrl) {
         this.portalRepository = portalRepository;
         this.supportMessageRepository = supportMessageRepository;
         this.supportTicketService = supportTicketService;
         this.bitrixRestClient = bitrixRestClient;
+        this.crmTicketSyncService = crmTicketSyncService;
         this.objectMapper = objectMapper;
         this.publicBaseUrl = publicBaseUrl;
     }
@@ -223,11 +226,25 @@ public class ClientPortalService {
             message.setAdminMessageId(adminMessageId);
             message.setStatus("FORWARDED");
             supportMessageRepository.save(message);
+            crmTicketSyncService.syncMessage(message);
             client.setLastClientMessageAt(now);
             markSuccess(client);
             if (resolution.created()) {
                 try {
-                    sendClientAcknowledgement(client, dialogId);
+                    String acknowledgementText = "Спасибо, обращение передано в техподдержку «Умные продажи». Оператор ответит здесь после обработки.";
+                    String acknowledgementMessageId = sendClientAcknowledgement(client, dialogId, acknowledgementText);
+
+                    SupportMessage acknowledgement = new SupportMessage(client);
+                    acknowledgement.setSupportTicket(ticket);
+                    acknowledgement.setDirection("SYSTEM_TO_CLIENT");
+                    acknowledgement.setClientDialogId(dialogId);
+                    acknowledgement.setClientMessageId(acknowledgementMessageId);
+                    acknowledgement.setAdminDialogId(ticket.getAdminDialogId());
+                    acknowledgement.setSenderName("Система техподдержки");
+                    acknowledgement.setText(acknowledgementText);
+                    acknowledgement.setStatus("SENT");
+                    supportMessageRepository.save(acknowledgement);
+                    crmTicketSyncService.syncMessage(acknowledgement);
                 } catch (BitrixRestException acknowledgementError) {
                     TRAFFIC_LOG.warn(
                             "[B24-ROUTE][CLIENT_ACK][FAILED] clientCode={} ticketId={} error={}",
@@ -372,6 +389,7 @@ public class ClientPortalService {
             answer.setRawEventJson(toJson(payload));
             answer.setStatus("SENT");
             supportMessageRepository.save(answer);
+            crmTicketSyncService.syncMessage(answer);
 
             if (target.sourceMessage() != null) {
                 target.sourceMessage().setStatus("ANSWERED");
@@ -535,12 +553,12 @@ public class ClientPortalService {
         return extractMessageId(root);
     }
 
-    private void sendClientAcknowledgement(PortalInstallation client, String dialogId) {
+    private String sendClientAcknowledgement(PortalInstallation client, String dialogId, String text) {
         if (dialogId == null || dialogId.isBlank()) {
-            return;
+            return null;
         }
         if (client.getBotId() == null || client.getBotToken() == null) {
-            return;
+            return null;
         }
 
         Map<String, Object> payload = Map.of(
@@ -548,11 +566,12 @@ public class ClientPortalService {
                 "botToken", client.getBotToken(),
                 "dialogId", dialogId,
                 "fields", Map.of(
-                        "message", "Спасибо, обращение передано в техподдержку «Умные продажи». Оператор ответит здесь после обработки.",
+                        "message", text,
                         "urlPreview", false
                 )
         );
-        bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+        JsonNode root = bitrixRestClient.callJson(client.getWebhookUrl(), "imbot.v2.Chat.Message.send", payload);
+        return extractMessageId(root);
     }
 
     private PortalInstallation findReadyAdminPortal() {

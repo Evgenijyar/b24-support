@@ -57,6 +57,19 @@ public class SupportMessage {
     @Column(nullable = false, length = 32)
     private String status;
 
+    @Column(name = "crm_timeline_comment_id")
+    private Long crmTimelineCommentId;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "crm_sync_status", nullable = false, length = 32)
+    private CrmSyncStatus crmSyncStatus;
+
+    @Column(name = "crm_last_error", columnDefinition = "text")
+    private String crmLastError;
+
+    @Column(name = "crm_synced_at")
+    private OffsetDateTime crmSyncedAt;
+
     @Column(name = "raw_event_json", columnDefinition = "text")
     private String rawEventJson;
 
@@ -70,6 +83,7 @@ public class SupportMessage {
         this.clientInstallation = clientInstallation;
         this.direction = "CLIENT_TO_ADMIN";
         this.status = "NEW";
+        this.crmSyncStatus = CrmSyncStatus.PENDING;
         this.createdAt = OffsetDateTime.now();
     }
 
@@ -180,6 +194,39 @@ public class SupportMessage {
     public void setRawEventJson(String rawEventJson) {
         this.rawEventJson = rawEventJson;
     }
+
+
+    public void markCrmSynced(Long commentId) {
+        this.crmTimelineCommentId = commentId;
+        this.crmSyncStatus = CrmSyncStatus.SYNCED;
+        this.crmLastError = null;
+        this.crmSyncedAt = OffsetDateTime.now();
+    }
+
+    public void markCrmError(String error) {
+        this.crmSyncStatus = CrmSyncStatus.ERROR;
+        this.crmLastError = error;
+    }
+
+    public void markCrmPending(String reason) {
+        this.crmSyncStatus = CrmSyncStatus.PENDING;
+        this.crmLastError = reason;
+    }
+
+    public void markCrmNotConfigured() {
+        this.crmSyncStatus = CrmSyncStatus.NOT_CONFIGURED;
+        this.crmLastError = null;
+    }
+
+    public void markCrmSkipped(String reason) {
+        this.crmSyncStatus = CrmSyncStatus.SKIPPED;
+        this.crmLastError = reason;
+    }
+
+    public Long getCrmTimelineCommentId() { return crmTimelineCommentId; }
+    public CrmSyncStatus getCrmSyncStatus() { return crmSyncStatus; }
+    public String getCrmLastError() { return crmLastError; }
+    public OffsetDateTime getCrmSyncedAt() { return crmSyncedAt; }
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;

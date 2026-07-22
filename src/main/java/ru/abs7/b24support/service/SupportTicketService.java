@@ -40,19 +40,22 @@ public class SupportTicketService {
     private final SupportMessageRepository supportMessageRepository;
     private final SupportSettingsService settingsService;
     private final BitrixRestClient bitrixRestClient;
+    private final CrmTicketSyncService crmTicketSyncService;
 
     public SupportTicketService(SupportTicketRepository ticketRepository,
                                 PortalInstallationRepository portalRepository,
                                 BitrixUserRepository bitrixUserRepository,
                                 SupportMessageRepository supportMessageRepository,
                                 SupportSettingsService settingsService,
-                                BitrixRestClient bitrixRestClient) {
+                                BitrixRestClient bitrixRestClient,
+                                CrmTicketSyncService crmTicketSyncService) {
         this.ticketRepository = ticketRepository;
         this.portalRepository = portalRepository;
         this.bitrixUserRepository = bitrixUserRepository;
         this.supportMessageRepository = supportMessageRepository;
         this.settingsService = settingsService;
         this.bitrixRestClient = bitrixRestClient;
+        this.crmTicketSyncService = crmTicketSyncService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -81,8 +84,14 @@ public class SupportTicketService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "В админке не выбраны специалисты техподдержки");
         }
 
-        String chatTitle = cleanChatTitle(client.getTitle());
-        SupportTicket ticket = ticketRepository.saveAndFlush(new SupportTicket(client, clientDialogId, chatTitle));
+        long sequenceNumber = ticketRepository
+                .findFirstByClientInstallation_IdOrderByClientSequenceNumberDesc(client.getId())
+                .map(previous -> previous.getClientSequenceNumber() + 1)
+                .orElse(1L);
+        String chatTitle = cleanChatTitle(client.getTitle(), sequenceNumber);
+        SupportTicket ticket = ticketRepository.saveAndFlush(
+                new SupportTicket(client, clientDialogId, chatTitle, sequenceNumber)
+        );
 
         Map<String, Object> fields = new LinkedHashMap<>();
         fields.put("title", chatTitle);
@@ -106,7 +115,9 @@ public class SupportTicketService {
         }
 
         ticket.markOpen(chatId, adminDialogId);
-        return new TicketResolution(ticketRepository.save(ticket), true);
+        SupportTicket saved = ticketRepository.save(ticket);
+        crmTicketSyncService.syncTicket(saved);
+        return new TicketResolution(saved, true);
     }
 
     public String forwardClientMessage(SupportTicket ticket, SupportMessage message) {
@@ -190,7 +201,10 @@ public class SupportTicketService {
 
             int retentionDays = settingsService.retentionDays();
             ticket.markClosed(userId, safe(userName, "Специалист техподдержки"), OffsetDateTime.now().plusDays(retentionDays));
-            return success("Обращение закрыто. Клиент уведомлён", ticketRepository.save(ticket));
+            SupportTicket saved = ticketRepository.save(ticket);
+            crmTicketSyncService.syncMessage(systemMessage);
+            crmTicketSyncService.syncClosedStage(saved);
+            return success("Обращение закрыто. Клиент уведомлён", saved);
         } catch (BitrixRestException | ResponseStatusException e) {
             return failure("Не удалось закрыть обращение: " + safe(e.getMessage(), "ошибка Bitrix24"), ticket);
         }
@@ -359,9 +373,14 @@ public class SupportTicketService {
         }
     }
 
-    private String cleanChatTitle(String value) {
-        String title = safe(value, "Клиент");
-        return title.length() <= 255 ? title : title.substring(0, 255);
+    private String cleanChatTitle(String value, long sequenceNumber) {
+        String suffix = ", обращение №" + sequenceNumber;
+        String company = safe(value, "Клиент");
+        int maxCompanyLength = Math.max(1, 255 - suffix.length());
+        if (company.length() > maxCompanyLength) {
+            company = company.substring(0, maxCompanyLength).trim();
+        }
+        return company + suffix;
     }
 
     private String extractMessageId(JsonNode root) {
