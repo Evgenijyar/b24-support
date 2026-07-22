@@ -109,7 +109,7 @@ class CrmTicketSyncServiceTest {
         Map<?, ?> fields = (Map<?, ?>) request.get("fields");
         assertThat(fields.get("contactId")).isEqualTo(55L);
         assertThat(fields.get("contactIds")).isEqualTo(List.of(55L));
-        assertThat(fields).doesNotContainKey("companyId");
+        assertThat(fields.containsKey("companyId")).isFalse();
     }
 
     @Test
