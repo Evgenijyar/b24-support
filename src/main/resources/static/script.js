@@ -115,7 +115,7 @@ function bindEvents() {
         });
     });
 
-    document.getElementById('btnAddPortal').addEventListener('click', openPortalWizard);
+    document.getElementById('btnAddPortal').addEventListener('click', () => openPortalWizard());
     document.getElementById('btnClosePortalModal').addEventListener('click', closePortalWizard);
     els.btnPortalWizardCancel.addEventListener('click', closePortalWizard);
     els.btnPortalWizardBack.addEventListener('click', portalWizardBack);
@@ -126,6 +126,26 @@ function bindEvents() {
     });
     document.querySelectorAll('input[name="portalRoleChoice"]').forEach(input => {
         input.addEventListener('change', updateWizardRole);
+    });
+    document.querySelectorAll('[data-portal-role-card]').forEach(card => {
+        card.addEventListener('click', event => {
+            const input = card.querySelector('input[name="portalRoleChoice"]');
+            if (!input || input.disabled) return;
+            if (event.target !== input && !input.checked) {
+                input.checked = true;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            input.focus({ preventScroll: true });
+        });
+        card.addEventListener('keydown', event => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            const input = card.querySelector('input[name="portalRoleChoice"]');
+            if (!input || input.disabled) return;
+            event.preventDefault();
+            input.checked = true;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            input.focus({ preventScroll: true });
+        });
     });
     els.wizardConnectCrm.addEventListener('change', handleWizardCrmToggle);
 
@@ -655,20 +675,24 @@ function showWorkspaceNotice(message, isError) {
 }
 
 function openPortalWizard(existingPortal = null) {
+    // DOM event listeners pass a MouseEvent as the first argument. It is not a portal.
+    const portal = existingPortal && typeof existingPortal === 'object' && Number.isFinite(Number(existingPortal.id))
+        ? existingPortal
+        : null;
     state.portalWizard = createEmptyPortalWizard();
-    if (existingPortal) {
-        state.portalWizard.portalId = existingPortal.id;
-        state.portalWizard.role = existingPortal.role;
-        state.portalWizard.title = existingPortal.title || '';
-        state.portalWizard.webhookUrl = existingPortal.webhookUrl || '';
-        state.portalWizard.clientPhone = existingPortal.clientPhone || '';
+    if (portal) {
+        state.portalWizard.portalId = portal.id;
+        state.portalWizard.role = portal.role;
+        state.portalWizard.title = portal.title || '';
+        state.portalWizard.webhookUrl = portal.webhookUrl || '';
+        state.portalWizard.clientPhone = portal.clientPhone || '';
     }
     clearPortalWizardError();
     els.portalModal.classList.remove('d-none');
     els.portalModal.setAttribute('aria-hidden', 'false');
     document.querySelectorAll('input[name="portalRoleChoice"]').forEach(input => {
         input.checked = input.value === state.portalWizard.role;
-        input.disabled = Boolean(existingPortal);
+        input.disabled = Boolean(portal);
     });
     els.wizardPortalTitle.value = state.portalWizard.title;
     els.wizardWebhookUrl.value = state.portalWizard.webhookUrl;
@@ -689,6 +713,14 @@ function updateWizardRole() {
     state.portalWizard.role = checked?.value || state.portalWizard.role;
     const isClient = state.portalWizard.role === 'CLIENT';
     els.wizardClientPhoneGroup.classList.toggle('d-none', !isClient);
+    document.querySelectorAll('[data-portal-role-card]').forEach(card => {
+        const input = card.querySelector('input[name="portalRoleChoice"]');
+        card.classList.toggle('is-selected', Boolean(input?.checked));
+        card.classList.toggle('is-disabled', Boolean(input?.disabled));
+        card.tabIndex = input?.disabled ? -1 : 0;
+        card.setAttribute('aria-checked', input?.checked ? 'true' : 'false');
+        card.setAttribute('role', 'radio');
+    });
 }
 
 async function portalWizardNext() {
