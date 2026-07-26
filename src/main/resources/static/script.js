@@ -33,6 +33,13 @@ function createEmptyPortalWizard() {
         clientPhone: '',
         selectedUserIds: [],
         processes: [],
+        crmEntityTypeId: null,
+        crmCategories: [],
+        crmStages: [],
+        crmCategoryId: null,
+        crmOpenStageId: null,
+        crmClosedStageId: null,
+        crmResponsibleUserId: null,
         adminReady: false,
         clientReady: false,
         running: false
@@ -40,8 +47,6 @@ function createEmptyPortalWizard() {
 }
 
 function cacheElements() {
-    els.syncIndicator = document.getElementById('syncIndicator');
-    els.btnRefresh = document.getElementById('btnRefresh');
     els.portalNavList = document.getElementById('portalNavList');
     els.portalWorkspace = document.getElementById('portalWorkspace');
     els.messagesNotice = document.getElementById('messagesNotice');
@@ -50,7 +55,6 @@ function cacheElements() {
     els.conversationCount = document.getElementById('conversationCount');
     els.conversationList = document.getElementById('conversationList');
     els.conversationThread = document.getElementById('conversationThread');
-    els.publicBaseUrl = document.getElementById('publicBaseUrl');
 
     els.portalModal = document.getElementById('portalModal');
     els.portalModalStep = document.getElementById('portalModalStep');
@@ -59,6 +63,7 @@ function cacheElements() {
     els.portalWizardStep1 = document.getElementById('portalWizardStep1');
     els.portalWizardAdminUsers = document.getElementById('portalWizardAdminUsers');
     els.portalWizardAdminFinalize = document.getElementById('portalWizardAdminFinalize');
+    els.portalWizardCrmMapping = document.getElementById('portalWizardCrmMapping');
     els.portalWizardClientFinalize = document.getElementById('portalWizardClientFinalize');
     els.wizardPortalTitle = document.getElementById('wizardPortalTitle');
     els.wizardWebhookUrl = document.getElementById('wizardWebhookUrl');
@@ -75,6 +80,11 @@ function cacheElements() {
     els.wizardCrmSelectGroup = document.getElementById('wizardCrmSelectGroup');
     els.wizardCrmProcessSelect = document.getElementById('wizardCrmProcessSelect');
     els.wizardCrmHint = document.getElementById('wizardCrmHint');
+    els.wizardCrmCategorySelect = document.getElementById('wizardCrmCategorySelect');
+    els.wizardCrmOpenStageSelect = document.getElementById('wizardCrmOpenStageSelect');
+    els.wizardCrmClosedStageSelect = document.getElementById('wizardCrmClosedStageSelect');
+    els.wizardCrmResponsibleSelect = document.getElementById('wizardCrmResponsibleSelect');
+    els.wizardCrmMappingHint = document.getElementById('wizardCrmMappingHint');
     els.btnPortalWizardCancel = document.getElementById('btnPortalWizardCancel');
     els.btnPortalWizardBack = document.getElementById('btnPortalWizardBack');
     els.btnPortalWizardNext = document.getElementById('btnPortalWizardNext');
@@ -148,8 +158,7 @@ function bindEvents() {
         });
     });
     els.wizardConnectCrm.addEventListener('change', handleWizardCrmToggle);
-
-    els.btnRefresh.addEventListener('click', loadAll);
+    els.wizardCrmCategorySelect.addEventListener('change', handleWizardCrmCategoryChange);
     els.portalNavList.addEventListener('click', async event => {
         const deleteButton = event.target.closest('[data-nav-delete-portal]');
         if (deleteButton) {
@@ -279,7 +288,6 @@ function renderAll() {
     renderPortalNav();
     renderPortalWorkspace();
     renderMessages();
-    els.publicBaseUrl.textContent = state.bootstrap?.publicBaseUrl || '—';
 }
 
 function renderPortalNav() {
@@ -363,7 +371,7 @@ function renderAdminPortalWorkspace(portal) {
     const selectedCount = state.adminUsers.filter(item => item.supportMember).length;
     const crm = state.crmConfig;
     return `
-        <div class="portal-settings-grid">
+        <div class="portal-settings-grid portal-settings-primary">
             ${renderGeneralSettings(portal)}
             <article class="settings-card">
                 <div class="settings-card-head">
@@ -383,37 +391,39 @@ function renderAdminPortalWorkspace(portal) {
             </article>
         </div>
 
-        <article class="settings-card mt-3">
-            <div class="settings-card-head">
-                <div>
-                    <div class="eyebrow">Сотрудники</div>
-                    <h3>Участники новых чатов</h3>
-                    <p>Выбрано: ${selectedCount}. Эти сотрудники автоматически добавляются в каждый новый чат обращения.</p>
+        <div class="portal-settings-grid portal-settings-secondary mt-3">
+            <article class="settings-card staff-settings-card">
+                <div class="settings-card-head">
+                    <div>
+                        <div class="eyebrow">Сотрудники</div>
+                        <h3>Участники новых чатов</h3>
+                        <p>Выбрано: ${selectedCount}. Эти сотрудники автоматически добавляются в каждый новый чат обращения.</p>
+                    </div>
+                    <button class="btn btn-flat" type="button" data-admin-load-users>Обновить список</button>
                 </div>
-                <button class="btn btn-flat" type="button" data-admin-load-users>Обновить список</button>
-            </div>
-            <div class="users-list portal-users-list">
-                ${state.adminUsers.length ? state.adminUsers.map(renderUserRow).join('') : '<div class="history-empty p-3">Сотрудники ещё не загружены.</div>'}
-            </div>
-            <div class="settings-actions">
-                <button class="btn btn-save" type="button" data-save-support-users>Сохранить сотрудников</button>
-            </div>
-        </article>
+                <div class="users-list portal-users-list compact-users-list">
+                    ${state.adminUsers.length ? state.adminUsers.map(renderUserRow).join('') : '<div class="history-empty p-3">Сотрудники ещё не загружены.</div>'}
+                </div>
+                <div class="settings-actions">
+                    <button class="btn btn-save" type="button" data-save-support-users>Сохранить сотрудников</button>
+                </div>
+            </article>
 
-        <article class="settings-card mt-3">
-            <div class="settings-card-head">
-                <div>
-                    <div class="eyebrow">CRM</div>
-                    <h3>${crm?.configured ? escapeHtml(crm.processTitle) : 'Смарт-процесс не подключён'}</h3>
-                    ${crm?.configured ? `<p>Воронка: ${escapeHtml(crm.categoryTitle)} · В работе: ${escapeHtml(crm.openStageTitle)} · Завершено: ${escapeHtml(crm.closedStageTitle)} · Ответственный: ${escapeHtml(crm.responsibleUserName)}</p>` : '<p>Подключение можно выполнить сейчас или в любой момент позже.</p>'}
+            <article class="settings-card crm-settings-card">
+                <div class="settings-card-head">
+                    <div>
+                        <div class="eyebrow">CRM</div>
+                        <h3>${crm?.configured ? escapeHtml(crm.processTitle) : 'Смарт-процесс не подключён'}</h3>
+                        ${crm?.configured ? `<p>Воронка: ${escapeHtml(crm.categoryTitle)}<br>В работе: ${escapeHtml(crm.openStageTitle)}<br>Завершено: ${escapeHtml(crm.closedStageTitle)}<br>Ответственный: ${escapeHtml(crm.responsibleUserName)}</p>` : '<p>Подключение можно выполнить сейчас или в любой момент позже.</p>'}
+                    </div>
                 </div>
-            </div>
-            ${crm?.lastError ? `<div class="error-panel mb-3">${escapeHtml(crm.lastError)}</div>` : ''}
-            <div class="button-row">
-                <button class="btn btn-save" type="button" data-crm-setup="${portal.id}">${crm?.configured ? 'Изменить настройки' : 'Подключить смарт-процесс'}</button>
-                ${crm?.configured ? `<button class="btn btn-flat" type="button" data-crm-validate="${portal.id}">Проверить интеграцию</button>` : ''}
-            </div>
-        </article>`;
+                ${crm?.lastError ? `<div class="error-panel mb-3">${escapeHtml(crm.lastError)}</div>` : ''}
+                <div class="settings-actions crm-settings-actions">
+                    <button class="btn btn-save" type="button" data-crm-setup="${portal.id}">${crm?.configured ? 'Изменить настройки' : 'Подключить смарт-процесс'}</button>
+                    ${crm?.configured ? `<button class="btn btn-flat" type="button" data-crm-validate="${portal.id}">Проверить интеграцию</button>` : ''}
+                </div>
+            </article>
+        </div>`;
 }
 
 function renderClientPortalWorkspace(portal) {
@@ -697,6 +707,14 @@ function openPortalWizard(existingPortal = null) {
     els.wizardPortalTitle.value = state.portalWizard.title;
     els.wizardWebhookUrl.value = state.portalWizard.webhookUrl;
     els.wizardClientPhone.value = state.portalWizard.clientPhone;
+    els.wizardConnectCrm.checked = false;
+    els.wizardCrmSelectGroup.classList.add('d-none');
+    els.wizardCrmProcessSelect.innerHTML = '';
+    els.wizardCrmCategorySelect.innerHTML = '';
+    els.wizardCrmOpenStageSelect.innerHTML = '';
+    els.wizardCrmClosedStageSelect.innerHTML = '';
+    els.wizardCrmResponsibleSelect.innerHTML = '';
+    els.wizardCrmHint.textContent = 'После выбора нажми «Далее», чтобы настроить воронку, стадии и ответственного.';
     updateWizardRole();
     renderPortalWizardStep();
 }
@@ -744,6 +762,11 @@ async function portalWizardNext() {
         } finally {
             setPortalWizardRunning(false);
         }
+        return;
+    }
+    if (state.portalWizard.role === 'ADMIN' && state.portalWizard.step === 3) {
+        if (!els.wizardConnectCrm.checked) return;
+        await prepareWizardCrmMapping();
     }
 }
 
@@ -802,18 +825,37 @@ function portalWizardBack() {
 function renderPortalWizardStep() {
     const wizard = state.portalWizard;
     const adminStep = wizard.role === 'ADMIN';
+    const crmEnabled = adminStep && els.wizardConnectCrm.checked;
+    const adminTotalSteps = crmEnabled || wizard.step === 4 ? 4 : 3;
+
     els.portalWizardStep1.classList.toggle('d-none', wizard.step !== 1);
     els.portalWizardAdminUsers.classList.toggle('d-none', !(adminStep && wizard.step === 2));
     els.portalWizardAdminFinalize.classList.toggle('d-none', !(adminStep && wizard.step === 3));
+    els.portalWizardCrmMapping.classList.toggle('d-none', !(adminStep && wizard.step === 4));
     els.portalWizardClientFinalize.classList.toggle('d-none', !(!adminStep && wizard.step === 2));
 
-    const totalSteps = adminStep ? 3 : 2;
+    const totalSteps = adminStep ? adminTotalSteps : 2;
     els.portalModalStep.textContent = `Шаг ${wizard.step} из ${totalSteps}`;
     els.portalModalTitle.textContent = wizard.portalId ? 'Настройка портала' : 'Добавить портал';
     els.btnPortalWizardBack.classList.toggle('d-none', wizard.step === 1);
-    els.btnPortalWizardNext.classList.toggle('d-none', (adminStep && wizard.step === 3) || (!adminStep && wizard.step === 2));
-    els.btnPortalWizardFinish.classList.toggle('d-none', !((adminStep && wizard.step === 3) || (!adminStep && wizard.step === 2)));
-    els.btnPortalWizardFinish.disabled = adminStep ? !wizard.adminReady : !wizard.clientReady;
+
+    let showNext = false;
+    let showFinish = false;
+    if (adminStep) {
+        if (wizard.step === 1 || wizard.step === 2) showNext = true;
+        else if (wizard.step === 3) {
+            showNext = crmEnabled;
+            showFinish = !crmEnabled;
+        } else if (wizard.step === 4) showFinish = true;
+    } else {
+        showNext = wizard.step === 1;
+        showFinish = wizard.step === 2;
+    }
+
+    els.btnPortalWizardNext.classList.toggle('d-none', !showNext);
+    els.btnPortalWizardFinish.classList.toggle('d-none', !showFinish);
+    els.btnPortalWizardNext.disabled = wizard.running || (adminStep && wizard.step === 3 && (!wizard.adminReady || els.wizardCrmProcessSelect.disabled));
+    els.btnPortalWizardFinish.disabled = wizard.running || (adminStep ? !wizard.adminReady : !wizard.clientReady);
     els.btnPortalWizardFinish.textContent = 'Готово';
 }
 
@@ -905,20 +947,101 @@ async function runClientFinalization() {
 async function handleWizardCrmToggle() {
     const checked = els.wizardConnectCrm.checked;
     els.wizardCrmSelectGroup.classList.toggle('d-none', !checked);
-    if (!checked || state.portalWizard.processes.length) return;
+    if (!checked) {
+        state.portalWizard.crmEntityTypeId = null;
+        state.portalWizard.crmCategories = [];
+        state.portalWizard.crmStages = [];
+        renderPortalWizardStep();
+        return;
+    }
+    if (state.portalWizard.processes.length) {
+        renderPortalWizardStep();
+        return;
+    }
     els.wizardCrmProcessSelect.innerHTML = '<option>Загрузка…</option>';
     els.wizardCrmProcessSelect.disabled = true;
+    renderPortalWizardStep();
     try {
         const processes = await api(`/api/admin-portal/${state.portalWizard.portalId}/crm/processes`);
         state.portalWizard.processes = (processes || []).filter(item => item.eligible);
         if (!state.portalWizard.processes.length) throw new Error('Нет доступных смарт-процессов со стадиями и клиентами');
         els.wizardCrmProcessSelect.innerHTML = state.portalWizard.processes.map(item => `<option value="${item.entityTypeId}">${escapeHtml(item.title)}</option>`).join('');
         els.wizardCrmProcessSelect.disabled = false;
+        els.wizardCrmHint.textContent = 'После выбора нажми «Далее», чтобы настроить воронку, стадии и ответственного.';
     } catch (error) {
         els.wizardCrmProcessSelect.innerHTML = '<option value="">Не удалось загрузить</option>';
         els.wizardCrmHint.textContent = error.message || 'Не удалось загрузить смарт-процессы';
         showPortalWizardError(error.message || 'Не удалось загрузить смарт-процессы');
+    } finally {
+        renderPortalWizardStep();
     }
+}
+
+async function prepareWizardCrmMapping() {
+    clearPortalWizardError();
+    const entityTypeId = Number(els.wizardCrmProcessSelect.value);
+    if (!Number.isFinite(entityTypeId)) return showPortalWizardError('Выбери смарт-процесс');
+    try {
+        setPortalWizardRunning(true);
+        state.portalWizard.crmEntityTypeId = entityTypeId;
+        const categories = await api(`/api/admin-portal/${state.portalWizard.portalId}/crm/processes/${entityTypeId}/categories`);
+        state.portalWizard.crmCategories = categories || [];
+        if (!state.portalWizard.crmCategories.length) throw new Error('У выбранного смарт-процесса нет доступных воронок');
+        els.wizardCrmCategorySelect.innerHTML = state.portalWizard.crmCategories.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+        const preferred = state.portalWizard.crmCategories.find(item => item.defaultCategory) || state.portalWizard.crmCategories[0];
+        els.wizardCrmCategorySelect.value = String(preferred.id);
+        populateWizardResponsibleUsers();
+        await loadWizardCrmStages(Number(preferred.id));
+        state.portalWizard.step = 4;
+        renderPortalWizardStep();
+    } catch (error) {
+        showPortalWizardError(error.message || 'Не удалось загрузить настройки смарт-процесса');
+    } finally {
+        setPortalWizardRunning(false);
+        renderPortalWizardStep();
+    }
+}
+
+async function handleWizardCrmCategoryChange() {
+    if (state.portalWizard.step !== 4 || state.portalWizard.running) return;
+    clearPortalWizardError();
+    try {
+        setPortalWizardRunning(true);
+        await loadWizardCrmStages(Number(els.wizardCrmCategorySelect.value));
+    } catch (error) {
+        showPortalWizardError(error.message || 'Не удалось загрузить стадии воронки');
+    } finally {
+        setPortalWizardRunning(false);
+        renderPortalWizardStep();
+    }
+}
+
+async function loadWizardCrmStages(categoryId) {
+    if (!Number.isFinite(categoryId)) throw new Error('Выбери воронку');
+    state.portalWizard.crmCategoryId = categoryId;
+    const stages = await api(`/api/admin-portal/${state.portalWizard.portalId}/crm/processes/${state.portalWizard.crmEntityTypeId}/categories/${categoryId}/stages`);
+    state.portalWizard.crmStages = stages || [];
+    if (!state.portalWizard.crmStages.length) throw new Error('У выбранной воронки нет стадий');
+
+    const processStages = state.portalWizard.crmStages.filter(item => String(item.semantics).toUpperCase() === 'PROCESS');
+    const successStages = state.portalWizard.crmStages.filter(item => String(item.semantics).toUpperCase() === 'SUCCESS');
+    const openOptions = processStages.length ? processStages : state.portalWizard.crmStages;
+    const closedOptions = successStages.length ? successStages : state.portalWizard.crmStages;
+    els.wizardCrmOpenStageSelect.innerHTML = openOptions.map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+    els.wizardCrmClosedStageSelect.innerHTML = closedOptions.map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+    const open = pickOpenStage(state.portalWizard.crmStages);
+    const closed = pickClosedStage(state.portalWizard.crmStages);
+    if (open) els.wizardCrmOpenStageSelect.value = open.id;
+    if (closed) els.wizardCrmClosedStageSelect.value = closed.id;
+}
+
+function populateWizardResponsibleUsers() {
+    const activeUsers = state.adminUsers.filter(item => item.active);
+    els.wizardCrmResponsibleSelect.innerHTML = activeUsers.map(item => `<option value="${escapeAttribute(item.bitrixUserId)}">${escapeHtml(item.displayName || 'ID ' + item.bitrixUserId)}</option>`).join('');
+    if (!els.wizardCrmResponsibleSelect.options.length) throw new Error('Не найдено активных сотрудников для назначения ответственным');
+    const selectedDbId = state.portalWizard.selectedUserIds[0];
+    const preferred = activeUsers.find(item => item.id === selectedDbId) || activeUsers.find(item => item.supportMember) || activeUsers[0];
+    if (preferred?.bitrixUserId) els.wizardCrmResponsibleSelect.value = String(preferred.bitrixUserId);
 }
 
 async function portalWizardFinish() {
@@ -928,10 +1051,25 @@ async function portalWizardFinish() {
 
     try {
         setPortalWizardRunning(true);
-        if (state.portalWizard.role === 'ADMIN' && els.wizardConnectCrm.checked) {
-            const entityTypeId = Number(els.wizardCrmProcessSelect.value);
-            if (!Number.isFinite(entityTypeId)) throw new Error('Выбери смарт-процесс');
-            await autoConfigureCrm(state.portalWizard.portalId, entityTypeId);
+        if (state.portalWizard.role === 'ADMIN' && state.portalWizard.step === 4) {
+            const categoryId = Number(els.wizardCrmCategorySelect.value);
+            const responsibleUserId = Number(els.wizardCrmResponsibleSelect.value);
+            const openStageId = els.wizardCrmOpenStageSelect.value;
+            const closedStageId = els.wizardCrmClosedStageSelect.value;
+            if (!Number.isFinite(categoryId)) throw new Error('Выбери воронку');
+            if (!openStageId) throw new Error('Выбери стадию обращения в работе');
+            if (!closedStageId) throw new Error('Выбери стадию завершённого обращения');
+            if (!Number.isFinite(responsibleUserId)) throw new Error('Выбери ответственного');
+            await api(`/api/admin-portal/${state.portalWizard.portalId}/crm/config`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    entityTypeId: state.portalWizard.crmEntityTypeId,
+                    categoryId,
+                    openStageId,
+                    closedStageId,
+                    responsibleUserId
+                })
+            });
         }
         const portalId = state.portalWizard.portalId;
         closePortalWizardForce();
@@ -944,32 +1082,6 @@ async function portalWizardFinish() {
     } finally {
         setPortalWizardRunning(false);
     }
-}
-
-async function autoConfigureCrm(portalId, entityTypeId) {
-    const categories = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories`);
-    if (!categories?.length) throw new Error('У смарт-процесса нет доступной воронки');
-    const category = categories.find(item => item.defaultCategory) || categories[0];
-    const stages = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories/${category.id}/stages`);
-    if (!stages?.length) throw new Error('У выбранного смарт-процесса нет стадий');
-    const open = pickOpenStage(stages);
-    const closed = pickClosedStage(stages);
-    if (!open || !closed) throw new Error('Не удалось автоматически определить рабочую и завершающую стадии');
-
-    const selectedDbId = state.portalWizard.selectedUserIds[0];
-    const responsible = state.adminUsers.find(item => item.id === selectedDbId) || state.adminUsers.find(item => item.supportMember) || state.adminUsers.find(item => item.active);
-    if (!responsible?.bitrixUserId) throw new Error('Не удалось определить ответственного сотрудника');
-
-    await api(`/api/admin-portal/${portalId}/crm/config`, {
-        method: 'PUT',
-        body: JSON.stringify({
-            entityTypeId,
-            categoryId: category.id,
-            openStageId: open.id,
-            closedStageId: closed.id,
-            responsibleUserId: responsible.bitrixUserId
-        })
-    });
 }
 
 function pickOpenStage(stages) {
@@ -996,7 +1108,14 @@ function setSetupCheck(element, stateName, text) {
 
 function setPortalWizardRunning(running) {
     state.portalWizard.running = running;
-    [els.btnPortalWizardCancel, els.btnPortalWizardBack, els.btnPortalWizardNext, els.btnPortalWizardFinish].forEach(button => button.disabled = running);
+    els.btnPortalWizardCancel.disabled = running;
+    els.btnPortalWizardBack.disabled = running;
+    if (running) {
+        els.btnPortalWizardNext.disabled = true;
+        els.btnPortalWizardFinish.disabled = true;
+    } else {
+        renderPortalWizardStep();
+    }
 }
 
 function closePortalWizardForce() {
@@ -1148,8 +1267,7 @@ function formatDateTime(value) {
 }
 
 function setLoading(loading) {
-    els.syncIndicator.classList.toggle('d-none', !loading);
-    els.btnRefresh.disabled = loading;
+    document.body.classList.toggle('is-loading', Boolean(loading));
 }
 
 async function api(url, options = {}) {

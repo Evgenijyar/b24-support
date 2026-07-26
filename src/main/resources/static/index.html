@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>B24 SUPPORT | Control Center</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=032">
+    <link rel="stylesheet" href="style.css?v=033">
 </head>
 <body>
 <div class="app-shell">
@@ -29,13 +29,8 @@
         <nav class="top-nav-menu" aria-label="Разделы B24 Support">
             <button class="top-nav-link active" type="button" data-page="portals">Порталы</button>
             <button class="top-nav-link" type="button" data-page="messages">Сообщения</button>
-            <button class="top-nav-link" type="button" data-page="settings">Настройки</button>
         </nav>
 
-        <div class="top-actions">
-            <span id="syncIndicator" class="sync-indicator d-none">Обновление...</span>
-            <button id="btnRefresh" class="btn btn-flat" type="button">Обновить</button>
-        </div>
     </header>
 
     <main class="app-layout">
@@ -77,21 +72,6 @@
                 </div>
             </div>
 
-            <div id="settingsPage" class="dashboard-zone page-section d-none">
-                <div class="project-workspace">
-                    <div class="workspace-heading">
-                        <div>
-                            <div class="eyebrow">Настройки</div>
-                            <h2 class="workspace-title">Системные параметры</h2>
-                            <div class="workspace-meta">Технические параметры текущего backend.</div>
-                        </div>
-                    </div>
-                    <div class="info-card text-start">
-                        <p class="mb-2"><b>Public URL:</b> <span id="publicBaseUrl">—</span></p>
-                        <p class="mb-0"><b>Webhook endpoint клиентского бота:</b> <span class="code-inline">/api/bitrix/events/client/{clientCode}</span></p>
-                    </div>
-                </div>
-            </div>
         </section>
     </main>
 </div>
@@ -167,8 +147,32 @@
                 <div id="wizardCrmSelectGroup" class="mt-3 d-none">
                     <label class="form-label" for="wizardCrmProcessSelect">Смарт-процесс</label>
                     <select id="wizardCrmProcessSelect" class="form-select custom-input"></select>
-                    <div id="wizardCrmHint" class="field-hint">Воронка и стадии будут сопоставлены автоматически. После подключения их можно изменить в настройках портала.</div>
+                    <div id="wizardCrmHint" class="field-hint">После выбора нажми «Далее», чтобы настроить воронку, стадии и ответственного.</div>
                 </div>
+            </section>
+
+            <section id="portalWizardCrmMapping" class="portal-wizard-step d-none">
+                <div class="wizard-section-head">
+                    <div>
+                        <h3>Настройки смарт-процесса</h3>
+                        <p>Выбери воронку, стадии жизненного цикла обращения и ответственного сотрудника.</p>
+                    </div>
+                </div>
+                <label class="form-label" for="wizardCrmCategorySelect">Воронка</label>
+                <select id="wizardCrmCategorySelect" class="form-select custom-input"></select>
+                <div class="two-col-form mt-3">
+                    <div>
+                        <label class="form-label" for="wizardCrmOpenStageSelect">Обращение в работе</label>
+                        <select id="wizardCrmOpenStageSelect" class="form-select custom-input"></select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="wizardCrmClosedStageSelect">Обращение завершено</label>
+                        <select id="wizardCrmClosedStageSelect" class="form-select custom-input"></select>
+                    </div>
+                </div>
+                <label class="form-label mt-3" for="wizardCrmResponsibleSelect">Ответственный</label>
+                <select id="wizardCrmResponsibleSelect" class="form-select custom-input"></select>
+                <div id="wizardCrmMappingHint" class="field-hint mt-2">Настройки будут сохранены вместе с завершением мастера.</div>
             </section>
 
             <section id="portalWizardClientFinalize" class="portal-wizard-step d-none">
@@ -246,6 +250,6 @@
     </div>
 </div>
 
-<script src="script.js?v=032"></script>
+<script src="script.js?v=033"></script>
 </body>
 </html>

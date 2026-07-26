@@ -728,3 +728,51 @@ button, input, select { font: inherit; }
 @media (max-width: 620px) {
     .portal-radio-group { grid-template-columns: 1fr; gap: 10px; }
 }
+
+/* Final portal setup and compact admin layout v033 */
+.portal-settings-primary,
+.portal-settings-secondary {
+    align-items: stretch;
+}
+
+.portal-settings-secondary .settings-card {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.compact-users-list {
+    flex: 1 1 auto;
+    min-height: 180px;
+    max-height: 310px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #555 transparent;
+}
+
+.compact-users-list::-webkit-scrollbar { width: 9px; }
+.compact-users-list::-webkit-scrollbar-track { background: transparent; }
+.compact-users-list::-webkit-scrollbar-thumb {
+    background: #555;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+}
+.compact-users-list::-webkit-scrollbar-thumb:hover { background: #6a6a6a; background-clip: padding-box; }
+
+.crm-settings-card .settings-card-head { flex: 1 1 auto; }
+.crm-settings-card .settings-card-head p { line-height: 1.65; }
+.crm-settings-actions { margin-top: auto; }
+
+#portalWizardCrmMapping .two-col-form { align-items: end; }
+#portalWizardCrmMapping .field-hint { line-height: 1.45; }
+
+body.is-loading .top-nav-link,
+body.is-loading .history-header {
+    cursor: progress;
+}
+
+@media (max-width: 1050px) {
+    .portal-settings-secondary { grid-template-columns: 1fr; }
+    .compact-users-list { max-height: 360px; }
+}
