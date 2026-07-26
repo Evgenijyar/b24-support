@@ -264,3 +264,172 @@ button, input, select { font: inherit; }
 @media (max-width: 780px) {
     .crm-integration-card { align-items: flex-start; flex-direction: column; }
 }
+
+/* Portal-centric UI v030 */
+.history-item.is-active {
+    border-color: rgba(168, 199, 250, 0.38);
+    background: rgba(168, 199, 250, 0.10);
+}
+
+.portal-detail-heading { align-items: flex-end; }
+.portal-settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+    gap: 14px;
+}
+.settings-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    box-shadow: 0 20px 38px rgba(0,0,0,0.12);
+}
+.settings-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+.settings-card-head h3 { margin: 0; font-size: 1.08rem; font-weight: 650; }
+.settings-card-head p { margin: 6px 0 0; color: var(--text-secondary); font-size: 0.88rem; line-height: 1.45; }
+.settings-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 18px;
+    margin-top: 18px;
+    border-top: 1px solid var(--border-subtle);
+}
+.setup-status-grid { display: grid; grid-template-columns: 1fr; gap: 9px; }
+.mini-status {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    padding: 11px 12px;
+    background: var(--bg-surface);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+}
+.mini-status > span {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary);
+    background: var(--bg-panel);
+    font-weight: 800;
+}
+.mini-status b, .mini-status small { display: block; }
+.mini-status b { font-size: 0.86rem; }
+.mini-status small { color: var(--text-secondary); font-size: 0.76rem; margin-top: 2px; }
+.mini-status.is-ok { border-color: rgba(143, 214, 148, 0.28); }
+.mini-status.is-ok > span { color: var(--success-soft); background: rgba(143, 214, 148, 0.12); }
+.portal-users-list { max-height: 430px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+
+.portal-wizard-card { width: min(820px, 100%); }
+.portal-wizard-step { min-height: 320px; }
+.portal-role-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.portal-role-option { position: relative; cursor: pointer; }
+.portal-role-option input { position: absolute; opacity: 0; pointer-events: none; }
+.portal-role-option > span {
+    min-height: 112px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    padding: 18px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    transition: .18s ease;
+}
+.portal-role-option b { color: var(--text-primary); font-size: 0.98rem; }
+.portal-role-option small { color: var(--text-secondary); line-height: 1.4; }
+.portal-role-option:hover > span { background: var(--bg-surface-hover); }
+.portal-role-option input:checked + span {
+    border-color: rgba(168, 199, 250, 0.48);
+    background: rgba(168, 199, 250, 0.11);
+    box-shadow: inset 0 0 0 1px rgba(168, 199, 250, 0.12);
+}
+.portal-role-option input:disabled + span { opacity: .68; cursor: default; }
+
+.wizard-banner {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: .88rem;
+}
+.wizard-banner.is-success { color: var(--success-soft); background: rgba(143,214,148,.10); border-color: rgba(143,214,148,.25); }
+.wizard-banner.is-error { color: var(--danger-soft); background: rgba(255,138,128,.10); border-color: rgba(255,138,128,.25); }
+.wizard-banner.is-loading { color: var(--info-soft); }
+.wizard-section-head { display: flex; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+.wizard-section-head h3 { margin: 0; font-size: 1rem; }
+.wizard-section-head p { margin: 6px 0 0; color: var(--text-secondary); font-size: .84rem; }
+.wizard-users-list {
+    max-height: 390px;
+    overflow-y: auto;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+}
+.setup-checklist { display: flex; flex-direction: column; gap: 10px; }
+.setup-check {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+}
+.setup-check-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    font-weight: 800;
+}
+.setup-check b, .setup-check small { display: block; }
+.setup-check b { font-size: .9rem; }
+.setup-check small { color: var(--text-secondary); margin-top: 3px; font-size: .78rem; }
+.setup-check.is-success { border-color: rgba(143,214,148,.28); }
+.setup-check.is-success .setup-check-icon { color: var(--success-soft); background: rgba(143,214,148,.13); }
+.setup-check.is-loading { border-color: rgba(168,199,250,.28); }
+.setup-check.is-loading .setup-check-icon { color: var(--info-soft); background: rgba(168,199,250,.11); }
+.setup-check.is-error { border-color: rgba(255,138,128,.28); }
+.setup-check.is-error .setup-check-icon { color: var(--danger-soft); background: rgba(255,138,128,.11); }
+.smart-process-toggle {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    align-items: flex-start;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    background: rgba(168,199,250,.055);
+    cursor: pointer;
+}
+.smart-process-toggle input { margin-top: 3px; accent-color: var(--info-soft); }
+.smart-process-toggle b, .smart-process-toggle small { display: block; }
+.smart-process-toggle small { color: var(--text-secondary); font-size: .78rem; margin-top: 3px; }
+
+@media (max-width: 1050px) {
+    .portal-settings-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 780px) {
+    .portal-role-options { grid-template-columns: 1fr; }
+    .portal-wizard-step { min-height: 0; }
+    .settings-card-head { flex-direction: column; }
+}

@@ -1,13 +1,14 @@
 const state = {
-    page: 'overview',
+    page: 'portals',
     portals: [],
     portalStats: { total: 0, adminCount: 0, clientCount: 0 },
     bootstrap: null,
     adminSummary: null,
     adminUsers: [],
-    clientMessages: [],
-    editingPortal: null,
     crmConfig: null,
+    clientMessages: [],
+    selectedPortalId: null,
+    portalWizard: createEmptyPortalWizard(),
     crmWizard: { step: 1, processes: [], categories: [], stages: [] }
 };
 
@@ -19,42 +20,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadAll();
 });
 
+function createEmptyPortalWizard() {
+    return {
+        step: 1,
+        portalId: null,
+        role: null,
+        title: '',
+        webhookUrl: '',
+        clientPhone: '',
+        selectedUserIds: [],
+        processes: [],
+        adminReady: false,
+        clientReady: false,
+        running: false
+    };
+}
+
 function cacheElements() {
     els.syncIndicator = document.getElementById('syncIndicator');
     els.btnRefresh = document.getElementById('btnRefresh');
     els.portalNavList = document.getElementById('portalNavList');
-    els.portalCards = document.getElementById('portalCards');
-    els.portalNotice = document.getElementById('portalNotice');
-    els.adminNotice = document.getElementById('adminNotice');
-    els.adminPortalPanel = document.getElementById('adminPortalPanel');
-    els.adminUsersPanel = document.getElementById('adminUsersPanel');
+    els.portalWorkspace = document.getElementById('portalWorkspace');
     els.messagesNotice = document.getElementById('messagesNotice');
     els.messagesList = document.getElementById('messagesList');
-    els.backendStatePill = document.getElementById('backendStatePill');
-    els.metricTotal = document.getElementById('metricTotal');
-    els.metricAdmin = document.getElementById('metricAdmin');
-    els.metricClients = document.getElementById('metricClients');
-    els.bootstrapJson = document.getElementById('bootstrapJson');
     els.publicBaseUrl = document.getElementById('publicBaseUrl');
 
     els.portalModal = document.getElementById('portalModal');
+    els.portalModalStep = document.getElementById('portalModalStep');
     els.portalModalTitle = document.getElementById('portalModalTitle');
-    els.portalId = document.getElementById('portalId');
-    els.portalRole = document.getElementById('portalRole');
-    els.portalClientCode = document.getElementById('portalClientCode');
-    els.portalTitle = document.getElementById('portalTitle');
-    els.portalDomain = document.getElementById('portalDomain');
-    els.portalWebhookUrl = document.getElementById('portalWebhookUrl');
-    els.portalClientPhoneGroup = document.getElementById('portalClientPhoneGroup');
-    els.portalClientPhone = document.getElementById('portalClientPhone');
-    els.portalMemberId = document.getElementById('portalMemberId');
-    els.portalStatus = document.getElementById('portalStatus');
-    els.portalForm = document.getElementById('portalForm');
-    els.portalFormError = document.getElementById('portalFormError');
-    els.btnDeletePortal = document.getElementById('btnDeletePortal');
-    els.portalClientActions = document.getElementById('portalClientActions');
-    els.btnModalClientTest = document.getElementById('btnModalClientTest');
-    els.btnModalClientRegisterBot = document.getElementById('btnModalClientRegisterBot');
+    els.portalWizardError = document.getElementById('portalWizardError');
+    els.portalWizardStep1 = document.getElementById('portalWizardStep1');
+    els.portalWizardAdminUsers = document.getElementById('portalWizardAdminUsers');
+    els.portalWizardAdminFinalize = document.getElementById('portalWizardAdminFinalize');
+    els.portalWizardClientFinalize = document.getElementById('portalWizardClientFinalize');
+    els.wizardPortalTitle = document.getElementById('wizardPortalTitle');
+    els.wizardWebhookUrl = document.getElementById('wizardWebhookUrl');
+    els.wizardClientPhoneGroup = document.getElementById('wizardClientPhoneGroup');
+    els.wizardClientPhone = document.getElementById('wizardClientPhone');
+    els.wizardConnectionState = document.getElementById('wizardConnectionState');
+    els.wizardUsersList = document.getElementById('wizardUsersList');
+    els.adminBotCheck = document.getElementById('adminBotCheck');
+    els.adminRoutingCheck = document.getElementById('adminRoutingCheck');
+    els.clientWebhookCheck = document.getElementById('clientWebhookCheck');
+    els.clientBotCheck = document.getElementById('clientBotCheck');
+    els.clientRoutingCheck = document.getElementById('clientRoutingCheck');
+    els.wizardConnectCrm = document.getElementById('wizardConnectCrm');
+    els.wizardCrmSelectGroup = document.getElementById('wizardCrmSelectGroup');
+    els.wizardCrmProcessSelect = document.getElementById('wizardCrmProcessSelect');
+    els.wizardCrmHint = document.getElementById('wizardCrmHint');
+    els.btnPortalWizardCancel = document.getElementById('btnPortalWizardCancel');
+    els.btnPortalWizardBack = document.getElementById('btnPortalWizardBack');
+    els.btnPortalWizardNext = document.getElementById('btnPortalWizardNext');
+    els.btnPortalWizardFinish = document.getElementById('btnPortalWizardFinish');
 
     els.crmModal = document.getElementById('crmModal');
     els.crmStepLabel = document.getElementById('crmStepLabel');
@@ -78,61 +95,38 @@ function bindEvents() {
         button.addEventListener('click', () => setActivePage(button.dataset.page));
     });
 
-    document.querySelectorAll('[data-switch-page]').forEach(button => {
-        button.addEventListener('click', () => setActivePage(button.dataset.switchPage));
-    });
-
-    document.getElementById('btnAddPortal').addEventListener('click', () => openPortalModal({ role: 'CLIENT' }));
-    document.getElementById('btnAddPortalTop').addEventListener('click', () => openPortalModal({ role: 'CLIENT' }));
-    document.getElementById('btnAdminCreate').addEventListener('click', () => openPortalModal({ role: 'ADMIN', clientCode: 'admin', title: 'Умные продажи' }));
-    document.querySelectorAll('[data-open-admin-create]').forEach(button => {
-        button.addEventListener('click', () => openPortalModal({ role: 'ADMIN', clientCode: 'admin', title: 'Умные продажи' }));
-    });
-
-    document.getElementById('btnClosePortalModal').addEventListener('click', closePortalModal);
-    document.getElementById('btnCancelPortal').addEventListener('click', closePortalModal);
+    document.getElementById('btnAddPortal').addEventListener('click', openPortalWizard);
+    document.getElementById('btnClosePortalModal').addEventListener('click', closePortalWizard);
+    els.btnPortalWizardCancel.addEventListener('click', closePortalWizard);
+    els.btnPortalWizardBack.addEventListener('click', portalWizardBack);
+    els.btnPortalWizardNext.addEventListener('click', portalWizardNext);
+    els.btnPortalWizardFinish.addEventListener('click', portalWizardFinish);
     els.portalModal.addEventListener('click', event => {
-        if (event.target === els.portalModal) closePortalModal();
+        if (event.target === els.portalModal) closePortalWizard();
     });
-    els.portalForm.addEventListener('submit', savePortalFromForm);
-    els.btnDeletePortal.addEventListener('click', deleteCurrentPortal);
-    if (els.btnModalClientTest) {
-        els.btnModalClientTest.addEventListener('click', async () => {
-            const portalId = els.btnModalClientTest.dataset.portalId;
-            if (!portalId) return;
-            closePortalModal();
-            await clientAction(portalId, 'test-connection', 'Клиентский портал проверен');
-        });
-    }
-    if (els.btnModalClientRegisterBot) {
-        els.btnModalClientRegisterBot.addEventListener('click', async () => {
-            const portalId = els.btnModalClientRegisterBot.dataset.portalId;
-            if (!portalId) return;
-            closePortalModal();
-            await clientAction(portalId, 'bot/register', 'Клиентский бот создан / проверен');
-        });
-    }
+    document.querySelectorAll('input[name="portalRoleChoice"]').forEach(input => {
+        input.addEventListener('change', updateWizardRole);
+    });
+    els.wizardConnectCrm.addEventListener('change', handleWizardCrmToggle);
 
-    els.portalRole.addEventListener('change', updatePortalRoleFields);
+    els.btnRefresh.addEventListener('click', loadAll);
+    els.portalNavList.addEventListener('click', async event => {
+        const item = event.target.closest('[data-portal-id]');
+        if (!item) return;
+        state.selectedPortalId = Number(item.dataset.portalId);
+        await loadSelectedPortalContext();
+        renderPortalNav();
+        renderPortalWorkspace();
+        setActivePage('portals');
+    });
+    els.portalWorkspace.addEventListener('click', handleWorkspaceClick);
+    els.portalWorkspace.addEventListener('submit', handleWorkspaceSubmit);
+
     document.getElementById('btnCloseCrmModal').addEventListener('click', closeCrmModal);
     els.crmModal.addEventListener('click', event => { if (event.target === els.crmModal) closeCrmModal(); });
     els.btnCrmBack.addEventListener('click', crmWizardBack);
     els.btnCrmNext.addEventListener('click', crmWizardNext);
     els.btnCrmSave.addEventListener('click', saveCrmConfiguration);
-
-    els.btnRefresh.addEventListener('click', loadAll);
-
-    els.portalNavList.addEventListener('click', event => {
-        const item = event.target.closest('[data-portal-id]');
-        if (!item) return;
-        setActivePage('portals');
-        const card = document.querySelector(`[data-portal-card-id="${CSS.escape(item.dataset.portalId)}"]`);
-        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
-
-    els.portalCards.addEventListener('click', handlePortalCardClick);
-    els.adminPortalPanel.addEventListener('click', handleAdminPanelClick);
-    els.adminUsersPanel.addEventListener('click', handleAdminUsersClick);
 }
 
 async function loadAll() {
@@ -144,42 +138,54 @@ async function loadAll() {
             api('/api/admin-portal/summary'),
             api('/api/client-portals/messages')
         ]);
-
         state.bootstrap = bootstrap;
-        state.portals = portals.items || [];
+        state.portals = sortPortals(portals.items || []);
         state.portalStats = portals;
         state.adminSummary = adminSummary;
         state.clientMessages = messages.items || [];
 
+        if (!state.selectedPortalId || !state.portals.some(item => item.id === state.selectedPortalId)) {
+            state.selectedPortalId = state.portals[0]?.id || null;
+        }
+        await loadSelectedPortalContext();
         renderAll();
-        await loadAdminUsersIfPossible(false);
-        await loadCrmConfigIfPossible(false);
     } catch (error) {
-        showNotice(els.portalNotice, error.message || 'Ошибка загрузки данных', true);
+        renderFatalWorkspace(error.message || 'Не удалось загрузить данные');
     } finally {
         setLoading(false);
     }
 }
 
+function sortPortals(portals) {
+    return [...portals].sort((a, b) => {
+        if (a.role !== b.role) return a.role === 'ADMIN' ? -1 : 1;
+        return String(a.title || '').localeCompare(String(b.title || ''), 'ru');
+    });
+}
+
+async function loadSelectedPortalContext() {
+    const portal = selectedPortal();
+    state.adminUsers = [];
+    state.crmConfig = null;
+    if (!portal || portal.role !== 'ADMIN') return;
+
+    try {
+        const [users, crmConfig] = await Promise.all([
+            api(`/api/admin-portal/${portal.id}/users`).catch(() => ({ users: [] })),
+            api(`/api/admin-portal/${portal.id}/crm/config`).catch(() => null)
+        ]);
+        state.adminUsers = users.users || [];
+        state.crmConfig = crmConfig;
+    } catch (_) {
+        state.adminUsers = [];
+        state.crmConfig = null;
+    }
+}
+
 function renderAll() {
-    renderMetrics();
     renderPortalNav();
-    renderPortalCards();
-    renderAdminPanel();
+    renderPortalWorkspace();
     renderMessages();
-    renderSettings();
-}
-
-function renderMetrics() {
-    els.metricTotal.textContent = state.portalStats.total ?? state.portals.length;
-    els.metricAdmin.textContent = state.portalStats.adminCount ?? state.portals.filter(item => item.role === 'ADMIN').length;
-    els.metricClients.textContent = state.portalStats.clientCount ?? state.portals.filter(item => item.role === 'CLIENT').length;
-    els.backendStatePill.textContent = state.bootstrap?.state || 'OK';
-    els.backendStatePill.className = 'status-pill active';
-    els.bootstrapJson.textContent = JSON.stringify(state.bootstrap || {}, null, 2);
-}
-
-function renderSettings() {
     els.publicBaseUrl.textContent = state.bootstrap?.publicBaseUrl || '—';
 }
 
@@ -188,470 +194,614 @@ function renderPortalNav() {
         els.portalNavList.innerHTML = '<div class="history-empty">Порталы пока не добавлены.</div>';
         return;
     }
-
     els.portalNavList.innerHTML = state.portals.map(portal => `
-        <button class="history-item" type="button" data-portal-id="${portal.id}">
+        <button class="history-item ${portal.id === state.selectedPortalId ? 'is-active' : ''}" type="button" data-portal-id="${portal.id}">
             <span class="history-item-title">${escapeHtml(portal.title)}</span>
-            <span class="history-item-meta">${escapeHtml(portal.domain)}</span>
+            <span class="history-item-meta">${escapeHtml(portal.domain || 'Домен не определён')}</span>
             <span class="${portal.role === 'ADMIN' ? 'history-item-admin' : 'history-item-client'}">${roleLabel(portal.role)} · ${statusLabel(portal.status)}</span>
         </button>
     `).join('');
 }
 
-function renderPortalCards() {
-    if (!state.portals.length) {
-        els.portalCards.innerHTML = `
-            <div class="info-card text-center">
-                <h2 class="mb-2">Порталы не добавлены</h2>
-                <p class="text-secondary mb-3">Начни с админского Bitrix24 своей компании.</p>
-                <button class="btn btn-save" type="button" onclick="openPortalModal({ role: 'ADMIN', clientCode: 'admin', title: 'Умные продажи' })">Добавить админский портал</button>
-            </div>
-        `;
-        return;
-    }
-
-    els.portalCards.innerHTML = state.portals.map(portal => `
-        <article class="portal-card" data-portal-card-id="${portal.id}">
-            <div class="portal-card-head">
-                <div>
-                    <div class="eyebrow">${roleLabel(portal.role)}</div>
-                    <h3>${escapeHtml(portal.title)}</h3>
-                    <div class="portal-domain">${escapeHtml(portal.domain)}</div>
-                </div>
-                <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
-            </div>
-
-            ${portal.role === 'CLIENT' ? `
-                <div class="client-action-strip">
-                    <div>
-                        <div class="eyebrow mb-1">Настройка клиентского бота</div>
-                        <div class="field-hint m-0">Проверь webhook клиента и зарегистрируй бота для маршрута клиент → отдельный чат обращения.</div>
-                    </div>
-                    <div class="button-row">
-                        <button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить webhook</button>
-                        <button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button>
-                        <button class="btn btn-flat btn-sm" type="button" data-client-repair-routing="${portal.id}" ${!portal.botId ? 'disabled' : ''}>Проверить маршрутизацию</button>
-                    </div>
-                </div>` : ''}
-
-            <div class="portal-meta-grid">
-                <div><span>Код</span><b>${escapeHtml(portal.clientCode)}</b></div>
-                <div><span>Webhook</span><b>${portal.webhookConfigured ? 'Заполнен' : 'Не указан'}</b></div>
-                ${portal.role === 'CLIENT' ? `<div><span>Телефон клиента</span><b>${escapeHtml(portal.clientPhone || '—')}</b></div>` : ''}
-                <div><span>Bot ID</span><b>${escapeHtml(portal.botId || '—')}</b></div>
-                <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
-                <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
-                <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
-                <div><span>Event URL</span><b>${portal.botEventWebhookUrl ? 'Готов' : '—'}</b></div>
-                <div><span>Последнее событие</span><b>${formatDateTime(portal.lastEventAt) || '—'}</b></div>
-            </div>
-
-            ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
-
-            <div class="portal-actions">
-                <button class="btn btn-flat btn-sm" type="button" data-edit-portal="${portal.id}">Редактировать</button>
-                ${portal.role === 'ADMIN' ? `<button class="btn btn-flat btn-sm" type="button" data-admin-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-admin-load-users="${portal.id}">Загрузить сотрудников</button>` : ''}
-                ${portal.role === 'CLIENT' ? `<button class="btn btn-flat btn-sm" type="button" data-client-test="${portal.id}">Проверить</button><button class="btn btn-save btn-sm" type="button" data-client-register-bot="${portal.id}">Создать клиентского бота</button><button class="btn btn-flat btn-sm" type="button" data-client-repair-routing="${portal.id}" ${!portal.botId ? 'disabled' : ''}>Проверить маршрутизацию</button>` : ''}
-            </div>
-        </article>
-    `).join('');
-}
-
-function renderMessages() {
-    if (!els.messagesList) return;
-
-    if (!state.clientMessages.length) {
-        els.messagesList.innerHTML = `
+function renderPortalWorkspace() {
+    const portal = selectedPortal();
+    if (!portal) {
+        els.portalWorkspace.innerHTML = `
             <div class="empty-state text-center">
-                <h2 class="fw-semibold text-white mb-3">Журнал сообщений пуст</h2>
-                <p class="text-secondary m-0">После регистрации клиентского бота напиши ему в клиентском Bitrix24. Сообщение должно появиться здесь и в админском чате.</p>
-            </div>
-        `;
+                <div class="eyebrow">Порталы Bitrix24</div>
+                <h2 class="fw-semibold text-white mb-2">Добавь первый портал</h2>
+                <p class="text-secondary mb-3">Подключение начинается с админского или клиентского Bitrix24.</p>
+                <button class="btn btn-save" type="button" data-open-add-wizard>Добавить портал</button>
+            </div>`;
         return;
     }
 
-    els.messagesList.innerHTML = `
-        <div class="messages-list">
-            ${state.clientMessages.map(message => renderMessageCard(message)).join('')}
+    els.portalWorkspace.innerHTML = `
+        <div class="workspace-heading portal-detail-heading">
+            <div>
+                <div class="eyebrow">${roleLabel(portal.role)}</div>
+                <h1 class="workspace-title">${escapeHtml(portal.title)}</h1>
+                <div class="workspace-meta">${escapeHtml(portal.domain || 'Домен определяется из webhook')}</div>
+            </div>
+            <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
         </div>
+        <div id="workspaceNotice" class="bitrix-notice"></div>
+        ${portal.role === 'ADMIN' ? renderAdminPortalWorkspace(portal) : renderClientPortalWorkspace(portal)}
     `;
 }
 
-function renderMessageCard(message) {
+function renderGeneralSettings(portal) {
     return `
-        <article class="message-card">
-            <div class="message-card-head">
-                <div>
-                    <div class="eyebrow">${escapeHtml(message.clientPortalTitle || 'Клиентский портал')} · #${escapeHtml(message.clientCode || '—')}</div>
-                    <h3>${escapeHtml(message.senderName || 'Клиент')}</h3>
-                    <div class="portal-domain">${formatDateTime(message.createdAt) || '—'} · клиентский диалог ${escapeHtml(message.clientDialogId || '—')}</div>
+        <article class="settings-card">
+            <div class="settings-card-head">
+                <div><div class="eyebrow">Основные параметры</div><h3>Подключение к Bitrix24</h3></div>
+            </div>
+            <form data-portal-settings-form="${portal.id}">
+                <label class="form-label">Название организации</label>
+                <input name="title" class="form-control custom-input" value="${escapeAttribute(portal.title || '')}" required>
+                ${portal.role === 'CLIENT' ? `
+                    <label class="form-label mt-3">Телефон клиента</label>
+                    <input name="clientPhone" class="form-control custom-input" type="tel" value="${escapeAttribute(portal.clientPhone || '')}" required>
+                ` : ''}
+                <label class="form-label mt-3">Webhook / REST URL</label>
+                <input name="webhookUrl" class="form-control custom-input" value="${escapeAttribute(portal.webhookUrl || '')}" required>
+                <div class="field-hint">Домен определяется автоматически из webhook. Внутренний код клиента скрыт и управляется backend.</div>
+                <div class="portal-meta-grid mt-3">
+                    <div><span>Домен</span><b>${escapeHtml(portal.domain || '—')}</b></div>
+                    <div><span>Bot ID</span><b>${escapeHtml(portal.botId || '—')}</b></div>
+                    <div><span>Последнее событие</span><b>${formatDateTime(portal.lastEventAt) || '—'}</b></div>
+                    <div><span>Статус</span><b>${statusLabel(portal.status)}</b></div>
                 </div>
-                <span class="status-pill ${message.status === 'FORWARDED' ? 'active' : message.status === 'ERROR' ? 'error' : ''}">${escapeHtml(message.status || 'NEW')}</span>
-            </div>
-            <div class="message-text">${escapeHtml(message.text || '')}</div>
-            <div class="portal-meta-grid mt-3">
-                <div><span>Client msg</span><b>${escapeHtml(message.clientMessageId || '—')}</b></div>
-                <div><span>Admin msg</span><b>${escapeHtml(message.adminMessageId || '—')}</b></div>
-                <div><span>Admin dialog</span><b>${escapeHtml(message.adminDialogId || '—')}</b></div>
-            </div>
-        </article>
-    `;
+                ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
+                <div class="settings-actions">
+                    <button class="btn btn-danger-soft me-auto" type="button" data-delete-portal="${portal.id}">Удалить портал</button>
+                    <button class="btn btn-save" type="submit">Сохранить изменения</button>
+                </div>
+            </form>
+        </article>`;
 }
 
-function renderAdminPanel() {
-    const summary = state.adminSummary;
-    const portal = summary?.adminPortal;
-
-    if (!portal) {
-        els.adminPortalPanel.innerHTML = `
-            <div class="info-card text-start">
-                <div class="eyebrow">Админский портал не подключён</div>
-                <h2>Добавь Bitrix24 своей компании</h2>
-                <p>После подключения можно будет загрузить сотрудников, выбрать специалистов новых чатов и настроить смарт-процесс.</p>
-                <button class="btn btn-save" type="button" onclick="openPortalModal({ role: 'ADMIN', clientCode: 'admin', title: 'Умные продажи' })">Добавить админский портал</button>
-            </div>
-        `;
-        els.adminUsersPanel.innerHTML = '';
-        return;
-    }
-
-    const botCreated = !!portal.botId;
-    const supportMembers = summary.supportMembers || 0;
-
-    els.adminPortalPanel.innerHTML = `
-        <article class="portal-card admin-main-card">
-            <div class="portal-card-head">
-                <div>
-                    <div class="eyebrow">Админский Bitrix24</div>
-                    <h3>${escapeHtml(portal.title)}</h3>
-                    <div class="portal-domain">${escapeHtml(portal.domain)}</div>
+function renderAdminPortalWorkspace(portal) {
+    const selectedCount = state.adminUsers.filter(item => item.supportMember).length;
+    const crm = state.crmConfig;
+    return `
+        <div class="portal-settings-grid">
+            ${renderGeneralSettings(portal)}
+            <article class="settings-card">
+                <div class="settings-card-head">
+                    <div><div class="eyebrow">Техническая настройка</div><h3>Админский бот и маршрутизация</h3></div>
                 </div>
-                <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
-            </div>
-
-            <div class="admin-steps-grid">
-                <div class="admin-step ${portal.webhookConfigured ? 'is-ok' : ''}"><b>1</b><span>Webhook URL</span><small>${portal.webhookConfigured ? 'заполнен' : 'не заполнен'}</small></div>
-                <div class="admin-step ${(summary.loadedUsers || 0) > 0 ? 'is-ok' : ''}"><b>2</b><span>Сотрудники</span><small>${summary.loadedUsers || 0} загружено</small></div>
-                <div class="admin-step ${supportMembers > 0 ? 'is-ok' : ''}"><b>3</b><span>Операторы</span><small>${supportMembers} выбрано</small></div>
-                <div class="admin-step ${botCreated ? 'is-ok' : ''}"><b>4</b><span>Бот</span><small>${botCreated ? 'ID ' + escapeHtml(portal.botId) : 'не создан'}</small></div>
-                <div class="admin-step ${state.crmConfig?.configured ? 'is-ok' : ''}"><b>5</b><span>Смарт-процесс</span><small>${state.crmConfig?.configured ? escapeHtml(state.crmConfig.processTitle) : 'не настроен'}</small></div>
-            </div>
-
-            <div class="portal-meta-grid mt-3">
-                <div><span>Bot code</span><b>${escapeHtml(portal.botCode || '—')}</b></div>
-                <div><span>Bot type</span><b>${escapeHtml(portal.botType || '—')}</b></div>
-                <div><span>Bot token</span><b>${escapeHtml(portal.botTokenMasked || '—')}</b></div>
-                <div><span>Chat ID</span><b>${escapeHtml(portal.supportChatId || '—')}</b></div>
-                <div><span>Dialog ID</span><b>${escapeHtml(portal.supportDialogId || '—')}</b></div>
-                <div><span>Event URL</span><b>${portal.botEventWebhookUrl ? 'Готов' : '—'}</b></div>
-                <div><span>Последнее событие</span><b>${formatDateTime(portal.lastEventAt) || '—'}</b></div>
-            </div>
-
-            ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
-
-            <div class="portal-actions">
-                <button class="btn btn-flat" type="button" data-edit-portal="${portal.id}">Редактировать портал</button>
-                <button class="btn btn-flat" type="button" data-admin-test="${portal.id}">Проверить подключение</button>
-                <button class="btn btn-save" type="button" data-admin-load-users="${portal.id}">Загрузить сотрудников</button>
-            </div>
-
-            <div class="portal-actions admin-bot-actions">
-                <button class="btn btn-save" type="button" data-admin-register-bot="${portal.id}">Создать / проверить бота</button>
-                <button class="btn btn-flat" type="button" data-admin-repair-routing="${portal.id}" ${!botCreated ? 'disabled' : ''}>Проверить маршрутизацию</button>
-            </div>
-            <div class="crm-integration-card">
-                <div>
-                    <div class="eyebrow">Смарт-процесс обращений</div>
-                    ${state.crmConfig?.configured ? `
-                        <h3>${escapeHtml(state.crmConfig.processTitle)}</h3>
-                        <div class="crm-config-summary">
-                            <span>Воронка: <b>${escapeHtml(state.crmConfig.categoryTitle)}</b></span>
-                            <span>В работе: <b>${escapeHtml(state.crmConfig.openStageTitle)}</b></span>
-                            <span>Завершено: <b>${escapeHtml(state.crmConfig.closedStageTitle)}</b></span>
-                            <span>Ответственный: <b>${escapeHtml(state.crmConfig.responsibleUserName)}</b></span>
-                        </div>
-                        ${state.crmConfig.lastError ? `<div class="error-panel mt-2">${escapeHtml(state.crmConfig.lastError)}</div>` : ''}
-                    ` : `<p>Выбери смарт-процесс, воронку, стадии и ответственного. После этого каждое обращение будет автоматически создавать CRM-тикет.</p>`}
+                <div class="setup-status-grid">
+                    ${miniStatus('Webhook', portal.webhookConfigured && portal.status === 'ACTIVE', portal.webhookConfigured ? 'Указан' : 'Не указан')}
+                    ${miniStatus('Бот', !!portal.botId, portal.botId ? `ID ${escapeHtml(portal.botId)}` : 'Не создан')}
+                    ${miniStatus('Маршрутизация', !!portal.botEventWebhookUrl, portal.botEventWebhookUrl ? 'Настроена' : 'Не проверена')}
                 </div>
-                <div class="button-row">
-                    <button class="btn btn-save" type="button" data-crm-setup="${portal.id}">${state.crmConfig?.configured ? 'Изменить настройки' : 'Настроить смарт-процесс'}</button>
-                    ${state.crmConfig?.configured ? `<button class="btn btn-flat" type="button" data-crm-validate="${portal.id}">Проверить интеграцию</button>` : ''}
+                <div class="button-row mt-3">
+                    <button class="btn btn-flat" type="button" data-admin-action="test-connection">Проверить webhook</button>
+                    <button class="btn btn-save" type="button" data-admin-action="bot/register">Создать / проверить бота</button>
+                    <button class="btn btn-flat" type="button" data-admin-action="routing/repair" ${portal.botId ? '' : 'disabled'}>Проверить маршрутизацию</button>
+                    <button class="btn btn-flat" type="button" data-resume-setup="${portal.id}">Мастер настройки</button>
                 </div>
-            </div>
-        </article>
-    `;
-
-    renderAdminUsers();
-}
-
-function renderAdminUsers() {
-    const portal = state.adminSummary?.adminPortal;
-    if (!portal) {
-        els.adminUsersPanel.innerHTML = '';
-        return;
-    }
-
-    if (!state.adminUsers.length) {
-        els.adminUsersPanel.innerHTML = `
-            <div class="info-card text-start">
-                <div class="eyebrow">Сотрудники</div>
-                <h2>Список пока пуст</h2>
-                <p>Нажми «Загрузить сотрудников», чтобы получить пользователей из админского Bitrix24 через REST API.</p>
-            </div>
-        `;
-        return;
-    }
-
-    els.adminUsersPanel.innerHTML = `
-        <div class="users-panel">
-            <div class="users-panel-head">
-                <div>
-                    <div class="eyebrow">Операторы поддержки</div>
-                    <h3>Выбери сотрудников для новых чатов обращений</h3>
-                    <p>Все выбранные сотрудники автоматически добавляются в каждый новый чат клиентского обращения.</p>
-                </div>
-                <button id="btnSaveSupportUsers" class="btn btn-save" type="button" data-save-support-users="${portal.id}">Сохранить выбранных</button>
-            </div>
-            <div class="users-list">
-                ${state.adminUsers.map(user => renderUserRow(user)).join('')}
-            </div>
+            </article>
         </div>
-    `;
+
+        <article class="settings-card mt-3">
+            <div class="settings-card-head">
+                <div>
+                    <div class="eyebrow">Сотрудники</div>
+                    <h3>Участники новых чатов</h3>
+                    <p>Выбрано: ${selectedCount}. Эти сотрудники автоматически добавляются в каждый новый чат обращения.</p>
+                </div>
+                <button class="btn btn-flat" type="button" data-admin-load-users>Обновить список</button>
+            </div>
+            <div class="users-list portal-users-list">
+                ${state.adminUsers.length ? state.adminUsers.map(renderUserRow).join('') : '<div class="history-empty p-3">Сотрудники ещё не загружены.</div>'}
+            </div>
+            <div class="settings-actions">
+                <button class="btn btn-save" type="button" data-save-support-users>Сохранить сотрудников</button>
+            </div>
+        </article>
+
+        <article class="settings-card mt-3">
+            <div class="settings-card-head">
+                <div>
+                    <div class="eyebrow">CRM</div>
+                    <h3>${crm?.configured ? escapeHtml(crm.processTitle) : 'Смарт-процесс не подключён'}</h3>
+                    ${crm?.configured ? `<p>Воронка: ${escapeHtml(crm.categoryTitle)} · В работе: ${escapeHtml(crm.openStageTitle)} · Завершено: ${escapeHtml(crm.closedStageTitle)} · Ответственный: ${escapeHtml(crm.responsibleUserName)}</p>` : '<p>Подключение можно выполнить сейчас или в любой момент позже.</p>'}
+                </div>
+            </div>
+            ${crm?.lastError ? `<div class="error-panel mb-3">${escapeHtml(crm.lastError)}</div>` : ''}
+            <div class="button-row">
+                <button class="btn btn-save" type="button" data-crm-setup="${portal.id}">${crm?.configured ? 'Изменить настройки' : 'Подключить смарт-процесс'}</button>
+                ${crm?.configured ? `<button class="btn btn-flat" type="button" data-crm-validate="${portal.id}">Проверить интеграцию</button>` : ''}
+            </div>
+        </article>`;
+}
+
+function renderClientPortalWorkspace(portal) {
+    return `
+        <div class="portal-settings-grid">
+            ${renderGeneralSettings(portal)}
+            <article class="settings-card">
+                <div class="settings-card-head">
+                    <div><div class="eyebrow">Клиентский портал</div><h3>Бот и маршрутизация</h3></div>
+                </div>
+                <div class="setup-status-grid">
+                    ${miniStatus('Webhook', portal.webhookConfigured && portal.status === 'ACTIVE', portal.webhookConfigured ? 'Указан' : 'Не указан')}
+                    ${miniStatus('Клиентский бот', !!portal.botId, portal.botId ? `ID ${escapeHtml(portal.botId)}` : 'Не создан')}
+                    ${miniStatus('Маршрутизация', !!portal.botEventWebhookUrl, portal.botEventWebhookUrl ? 'Настроена' : 'Не проверена')}
+                </div>
+                <div class="button-row mt-3">
+                    <button class="btn btn-flat" type="button" data-client-action="test-connection">Проверить webhook</button>
+                    <button class="btn btn-save" type="button" data-client-action="bot/register">Создать / проверить бота</button>
+                    <button class="btn btn-flat" type="button" data-client-action="routing/repair" ${portal.botId ? '' : 'disabled'}>Проверить маршрутизацию</button>
+                    <button class="btn btn-flat" type="button" data-resume-setup="${portal.id}">Мастер настройки</button>
+                </div>
+            </article>
+        </div>`;
+}
+
+function miniStatus(title, ok, detail) {
+    return `<div class="mini-status ${ok ? 'is-ok' : ''}"><span>${ok ? '✓' : '•'}</span><div><b>${title}</b><small>${detail}</small></div></div>`;
 }
 
 function renderUserRow(user) {
-    const initials = buildInitials(user.displayName || user.email || user.bitrixUserId);
+    const initials = [user.firstName, user.lastName].filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'U';
     return `
         <label class="user-row ${user.supportMember ? 'is-selected' : ''}">
-            <input type="checkbox" data-support-user-id="${user.id}" ${user.supportMember ? 'checked' : ''}>
+            <input type="checkbox" data-support-user-id="${user.id}" ${user.supportMember ? 'checked' : ''} ${user.active ? '' : 'disabled'}>
             <span class="user-avatar">${escapeHtml(initials)}</span>
-            <span class="user-main">
-                <b>${escapeHtml(user.displayName || 'Без имени')}</b>
-                <small>${escapeHtml([user.email, user.workPosition].filter(Boolean).join(' · ') || 'ID ' + user.bitrixUserId)}</small>
-            </span>
+            <span class="user-main"><b>${escapeHtml(user.displayName || 'Без имени')}</b><small>${escapeHtml([user.email, user.workPosition].filter(Boolean).join(' · ') || 'ID ' + user.bitrixUserId)}</small></span>
             <span class="user-id">B24 ID ${escapeHtml(user.bitrixUserId)}</span>
-        </label>
-    `;
+        </label>`;
 }
 
-async function handlePortalCardClick(event) {
-    const editId = event.target.closest('[data-edit-portal]')?.dataset.editPortal;
-    if (editId) {
-        const portal = findPortal(editId);
-        if (portal) openPortalModal(portal);
+function renderMessages() {
+    if (!state.clientMessages.length) {
+        els.messagesList.innerHTML = '<div class="empty-state text-center"><h2 class="fw-semibold text-white mb-2">Журнал сообщений пуст</h2><p class="text-secondary">Сообщения появятся после первого обращения клиента.</p></div>';
         return;
     }
-
-    const testId = event.target.closest('[data-admin-test]')?.dataset.adminTest;
-    if (testId) {
-        await testAdminPortal(testId);
-        return;
-    }
-
-    const loadId = event.target.closest('[data-admin-load-users]')?.dataset.adminLoadUsers;
-    if (loadId) {
-        await loadAdminUsers(loadId);
-        return;
-    }
-
-    const clientTestId = event.target.closest('[data-client-test]')?.dataset.clientTest;
-    if (clientTestId) {
-        await clientAction(clientTestId, 'test-connection', 'Клиентский портал проверен');
-        return;
-    }
-
-    const clientRegisterBotId = event.target.closest('[data-client-register-bot]')?.dataset.clientRegisterBot;
-    if (clientRegisterBotId) {
-        await clientAction(clientRegisterBotId, 'bot/register', 'Клиентский бот создан / проверен');
-        return;
-    }
-
-    const clientRepairRoutingId = event.target.closest('[data-client-repair-routing]')?.dataset.clientRepairRouting;
-    if (clientRepairRoutingId) {
-        await clientAction(clientRepairRoutingId, 'routing/repair', 'Маршрутизация клиентского бота проверена');
-        return;
-    }
-
-    const registerBotId = event.target.closest('[data-admin-register-bot]')?.dataset.adminRegisterBot;
-    if (registerBotId) {
-        await adminAction(registerBotId, 'bot/register', 'Бот создан / проверен');
-        return;
-    }
-
-    const repairRoutingId = event.target.closest('[data-admin-repair-routing]')?.dataset.adminRepairRouting;
-    if (repairRoutingId) {
-        await adminAction(repairRoutingId, 'routing/repair', 'Маршрутизация админского бота проверена');
-        return;
-    }
-
-    const createChatId = event.target.closest('[data-admin-create-chat]')?.dataset.adminCreateChat;
-    if (createChatId) {
-        await adminAction(createChatId, 'chat/create', 'Админский чат создан');
-        return;
-    }
-
-    const addChatUsersId = event.target.closest('[data-admin-add-chat-users]')?.dataset.adminAddChatUsers;
-    if (addChatUsersId) {
-        await adminAction(addChatUsersId, 'chat/add-users', 'Операторы добавлены в чат');
-        return;
-    }
-
-    const testMessageId = event.target.closest('[data-admin-test-message]')?.dataset.adminTestMessage;
-    if (testMessageId) {
-        await adminAction(testMessageId, 'chat/test-message', 'Тестовое сообщение отправлено');
-    }
+    els.messagesList.innerHTML = `<div class="messages-list">${state.clientMessages.map(message => `
+        <article class="message-card">
+            <div class="message-card-head"><div><div class="eyebrow">${escapeHtml(message.clientPortalTitle || 'Клиент')}</div><h3>${escapeHtml(message.senderName || 'Клиент')}</h3><div class="portal-domain">${formatDateTime(message.createdAt) || '—'}</div></div><span class="status-pill ${message.status === 'FORWARDED' ? 'active' : message.status === 'ERROR' ? 'error' : ''}">${escapeHtml(message.status || 'NEW')}</span></div>
+            <div class="message-text">${escapeHtml(message.text || '')}</div>
+        </article>`).join('')}</div>`;
 }
 
-async function handleAdminPanelClick(event) {
+function renderFatalWorkspace(message) {
+    els.portalWorkspace.innerHTML = `<div class="error-panel">${escapeHtml(message)}</div>`;
+}
+
+async function handleWorkspaceClick(event) {
+    const portal = selectedPortal();
+    if (!portal) {
+        if (event.target.closest('[data-open-add-wizard]')) openPortalWizard();
+        return;
+    }
+
+    const adminActionName = event.target.closest('[data-admin-action]')?.dataset.adminAction;
+    if (adminActionName) return runPortalAction(portal, `/api/admin-portal/${portal.id}/${adminActionName}`);
+    const clientActionName = event.target.closest('[data-client-action]')?.dataset.clientAction;
+    if (clientActionName) return runPortalAction(portal, `/api/client-portals/${portal.id}/${clientActionName}`);
+    if (event.target.closest('[data-admin-load-users]')) return loadAdminUsers(portal.id, true);
+    if (event.target.closest('[data-save-support-users]')) return saveSupportUsersFromWorkspace(portal.id);
+    if (event.target.closest('[data-delete-portal]')) return deletePortal(portal.id);
+    if (event.target.closest('[data-resume-setup]')) return openPortalWizard(portal);
+
     const setupId = event.target.closest('[data-crm-setup]')?.dataset.crmSetup;
-    if (setupId) {
-        await openCrmModal(setupId);
-        return;
-    }
+    if (setupId) return openCrmModal(Number(setupId));
     const validateId = event.target.closest('[data-crm-validate]')?.dataset.crmValidate;
-    if (validateId) {
-        await validateCrmConfiguration(validateId);
-        return;
-    }
-    await handlePortalCardClick(event);
-}
+    if (validateId) return validateCrmConfiguration(Number(validateId));
 
-async function handleAdminUsersClick(event) {
     if (event.target.matches('[data-support-user-id]')) {
-        const row = event.target.closest('.user-row');
-        if (row) row.classList.toggle('is-selected', event.target.checked);
+        event.target.closest('.user-row')?.classList.toggle('is-selected', event.target.checked);
+    }
+}
+
+async function handleWorkspaceSubmit(event) {
+    const form = event.target.closest('[data-portal-settings-form]');
+    if (!form) return;
+    event.preventDefault();
+    const portal = selectedPortal();
+    if (!portal) return;
+
+    const data = new FormData(form);
+    const payload = {
+        role: portal.role,
+        clientCode: portal.clientCode,
+        title: String(data.get('title') || '').trim(),
+        domain: null,
+        memberId: portal.memberId,
+        clientPhone: portal.role === 'CLIENT' ? String(data.get('clientPhone') || '').trim() : null,
+        webhookUrl: String(data.get('webhookUrl') || '').trim(),
+        botId: portal.botId,
+        supportDialogId: portal.supportDialogId,
+        status: portal.status
+    };
+    await performWorkspaceOperation(async () => {
+        await api(`/api/portals/${portal.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        await loadAll();
+        showWorkspaceNotice('Настройки портала сохранены', false);
+    });
+}
+
+async function runPortalAction(portal, url) {
+    await performWorkspaceOperation(async () => {
+        const result = await api(url, { method: 'POST' });
+        await loadAll();
+        showWorkspaceNotice(result.message || 'Операция выполнена', !result.success);
+    });
+}
+
+async function loadAdminUsers(portalId, showResult) {
+    await performWorkspaceOperation(async () => {
+        const result = await api(`/api/admin-portal/${portalId}/load-users`, { method: 'POST' });
+        const users = await api(`/api/admin-portal/${portalId}/users`);
+        state.adminUsers = users.users || [];
+        await loadAll();
+        if (showResult) showWorkspaceNotice(result.message || 'Сотрудники загружены', !result.success);
+    });
+}
+
+async function saveSupportUsersFromWorkspace(portalId) {
+    const ids = [...els.portalWorkspace.querySelectorAll('[data-support-user-id]:checked')].map(input => Number(input.dataset.supportUserId)).filter(Number.isFinite);
+    await performWorkspaceOperation(async () => {
+        const result = await api(`/api/admin-portal/${portalId}/support-users`, { method: 'PUT', body: JSON.stringify({ userIds: ids }) });
+        state.adminUsers = result.users || [];
+        await loadAll();
+        showWorkspaceNotice('Список сотрудников сохранён', false);
+    });
+}
+
+async function deletePortal(portalId) {
+    if (!window.confirm('Удалить этот портал из B24 Support?')) return;
+    await performWorkspaceOperation(async () => {
+        await api(`/api/portals/${portalId}`, { method: 'DELETE' });
+        state.selectedPortalId = null;
+        await loadAll();
+        showWorkspaceNotice('Портал удалён', false);
+    });
+}
+
+async function performWorkspaceOperation(operation) {
+    setLoading(true);
+    try { await operation(); } catch (error) { showWorkspaceNotice(error.message || 'Операция не выполнена', true); } finally { setLoading(false); }
+}
+
+function showWorkspaceNotice(message, isError) {
+    const notice = document.getElementById('workspaceNotice');
+    if (!notice) return;
+    notice.textContent = message;
+    notice.className = `bitrix-notice is-visible ${isError ? 'is-error' : ''}`;
+}
+
+function openPortalWizard(existingPortal = null) {
+    state.portalWizard = createEmptyPortalWizard();
+    if (existingPortal) {
+        state.portalWizard.portalId = existingPortal.id;
+        state.portalWizard.role = existingPortal.role;
+        state.portalWizard.title = existingPortal.title || '';
+        state.portalWizard.webhookUrl = existingPortal.webhookUrl || '';
+        state.portalWizard.clientPhone = existingPortal.clientPhone || '';
+    }
+    clearPortalWizardError();
+    els.portalModal.classList.remove('d-none');
+    els.portalModal.setAttribute('aria-hidden', 'false');
+    document.querySelectorAll('input[name="portalRoleChoice"]').forEach(input => {
+        input.checked = input.value === state.portalWizard.role;
+        input.disabled = Boolean(existingPortal);
+    });
+    els.wizardPortalTitle.value = state.portalWizard.title;
+    els.wizardWebhookUrl.value = state.portalWizard.webhookUrl;
+    els.wizardClientPhone.value = state.portalWizard.clientPhone;
+    updateWizardRole();
+    renderPortalWizardStep();
+}
+
+function closePortalWizard() {
+    if (state.portalWizard.running) return;
+    els.portalModal.classList.add('d-none');
+    els.portalModal.setAttribute('aria-hidden', 'true');
+    state.portalWizard = createEmptyPortalWizard();
+}
+
+function updateWizardRole() {
+    const checked = document.querySelector('input[name="portalRoleChoice"]:checked');
+    state.portalWizard.role = checked?.value || state.portalWizard.role;
+    const isClient = state.portalWizard.role === 'CLIENT';
+    els.wizardClientPhoneGroup.classList.toggle('d-none', !isClient);
+}
+
+async function portalWizardNext() {
+    clearPortalWizardError();
+    if (state.portalWizard.step === 1) {
+        await saveWizardPortalAndContinue();
         return;
     }
-
-    const saveId = event.target.closest('[data-save-support-users]')?.dataset.saveSupportUsers;
-    if (saveId) {
-        await saveSupportUsers(saveId);
+    if (state.portalWizard.role === 'ADMIN' && state.portalWizard.step === 2) {
+        const selected = [...els.wizardUsersList.querySelectorAll('[data-wizard-user-id]:checked')].map(input => Number(input.dataset.wizardUserId)).filter(Number.isFinite);
+        if (!selected.length) return showPortalWizardError('Выбери хотя бы одного сотрудника техподдержки');
+        state.portalWizard.selectedUserIds = selected;
+        try {
+            setPortalWizardRunning(true);
+            await api(`/api/admin-portal/${state.portalWizard.portalId}/support-users`, { method: 'PUT', body: JSON.stringify({ userIds: selected }) });
+            state.portalWizard.step = 3;
+            renderPortalWizardStep();
+            await runAdminFinalization();
+        } catch (error) {
+            showPortalWizardError(error.message || 'Не удалось сохранить сотрудников');
+        } finally {
+            setPortalWizardRunning(false);
+        }
     }
 }
 
-async function testAdminPortal(portalId) {
-    setLoading(true);
-    clearNotices();
+async function saveWizardPortalAndContinue() {
+    const role = state.portalWizard.role;
+    const title = els.wizardPortalTitle.value.trim();
+    const webhookUrl = els.wizardWebhookUrl.value.trim();
+    const clientPhone = els.wizardClientPhone.value.trim();
+    if (!role) return showPortalWizardError('Выбери тип портала');
+    if (!title) return showPortalWizardError('Укажи название организации');
+    if (!webhookUrl) return showPortalWizardError('Укажи Webhook / REST URL');
+    if (role === 'CLIENT' && !clientPhone) return showPortalWizardError('Для клиентского портала укажи телефон клиента');
+
+    const existing = state.portals.find(item => item.id === state.portalWizard.portalId);
+    const payload = {
+        role,
+        clientCode: existing?.clientCode || null,
+        title,
+        domain: null,
+        memberId: existing?.memberId || null,
+        clientPhone: role === 'CLIENT' ? clientPhone : null,
+        webhookUrl,
+        botId: existing?.botId || null,
+        supportDialogId: existing?.supportDialogId || null,
+        status: existing?.status || 'DRAFT'
+    };
+
     try {
-        const result = await api(`/api/admin-portal/${portalId}/test-connection`, { method: 'POST' });
-        await loadAll();
-        setActivePage('admin');
-        showNotice(els.adminNotice, result.message || 'Проверка выполнена', !result.success);
+        setPortalWizardRunning(true);
+        const portal = await api(state.portalWizard.portalId ? `/api/portals/${state.portalWizard.portalId}` : '/api/portals', {
+            method: state.portalWizard.portalId ? 'PUT' : 'POST',
+            body: JSON.stringify(payload)
+        });
+        state.portalWizard.portalId = portal.id;
+        state.portalWizard.title = portal.title;
+        state.portalWizard.webhookUrl = portal.webhookUrl;
+        state.portalWizard.clientPhone = portal.clientPhone || '';
+        state.portalWizard.step = 2;
+        renderPortalWizardStep();
+        if (role === 'ADMIN') await runAdminConnectionAndLoadUsers();
+        else await runClientFinalization();
     } catch (error) {
-        showNotice(els.adminNotice, error.message || 'Не удалось проверить подключение', true);
+        showPortalWizardError(error.message || 'Не удалось сохранить портал');
     } finally {
-        setLoading(false);
+        setPortalWizardRunning(false);
     }
 }
 
-async function loadAdminUsers(portalId) {
-    setLoading(true);
-    clearNotices();
+function portalWizardBack() {
+    if (state.portalWizard.running) return;
+    if (state.portalWizard.step > 1) state.portalWizard.step -= 1;
+    clearPortalWizardError();
+    renderPortalWizardStep();
+}
+
+function renderPortalWizardStep() {
+    const wizard = state.portalWizard;
+    const adminStep = wizard.role === 'ADMIN';
+    els.portalWizardStep1.classList.toggle('d-none', wizard.step !== 1);
+    els.portalWizardAdminUsers.classList.toggle('d-none', !(adminStep && wizard.step === 2));
+    els.portalWizardAdminFinalize.classList.toggle('d-none', !(adminStep && wizard.step === 3));
+    els.portalWizardClientFinalize.classList.toggle('d-none', !(!adminStep && wizard.step === 2));
+
+    const totalSteps = adminStep ? 3 : 2;
+    els.portalModalStep.textContent = `Шаг ${wizard.step} из ${totalSteps}`;
+    els.portalModalTitle.textContent = wizard.portalId ? 'Настройка портала' : 'Добавить портал';
+    els.btnPortalWizardBack.classList.toggle('d-none', wizard.step === 1);
+    els.btnPortalWizardNext.classList.toggle('d-none', (adminStep && wizard.step === 3) || (!adminStep && wizard.step === 2));
+    els.btnPortalWizardFinish.classList.toggle('d-none', !((adminStep && wizard.step === 3) || (!adminStep && wizard.step === 2)));
+    els.btnPortalWizardFinish.disabled = adminStep ? !wizard.adminReady : !wizard.clientReady;
+    els.btnPortalWizardFinish.textContent = 'Готово';
+}
+
+async function runAdminConnectionAndLoadUsers() {
+    setWizardBanner('Проверяю подключение к порталу…', 'loading');
     try {
-        const result = await api(`/api/admin-portal/${portalId}/load-users`, { method: 'POST' });
-        await loadAll();
-        await loadAdminUsersIfPossible(true);
-        setActivePage('admin');
-        showNotice(els.adminNotice, result.message || 'Сотрудники загружены', !result.success);
+        const connection = await api(`/api/admin-portal/${state.portalWizard.portalId}/test-connection`, { method: 'POST' });
+        if (!connection.success) throw new Error(connection.message || 'Webhook не прошёл проверку');
+        setWizardBanner('Подключение к порталу установлено', 'success');
+
+        const load = await api(`/api/admin-portal/${state.portalWizard.portalId}/load-users`, { method: 'POST' });
+        if (!load.success) throw new Error(load.message || 'Не удалось загрузить сотрудников');
+        const users = await api(`/api/admin-portal/${state.portalWizard.portalId}/users`);
+        state.adminUsers = users.users || [];
+        state.portalWizard.selectedUserIds = state.adminUsers.filter(item => item.supportMember).map(item => item.id);
+        renderWizardUsers();
     } catch (error) {
-        showNotice(els.adminNotice, error.message || 'Не удалось загрузить сотрудников', true);
-    } finally {
-        setLoading(false);
+        setWizardBanner('Подключение не установлено', 'error');
+        showPortalWizardError(`${error.message || 'Webhook не работает'}. Вернись назад и проверь URL.`);
     }
 }
 
-async function adminAction(portalId, action, fallbackMessage) {
-    setLoading(true);
-    clearNotices();
+function renderWizardUsers() {
+    if (!state.adminUsers.length) {
+        els.wizardUsersList.innerHTML = '<div class="history-empty p-3">Сотрудники не найдены.</div>';
+        return;
+    }
+    els.wizardUsersList.innerHTML = state.adminUsers.filter(item => item.active).map(user => {
+        const initials = [user.firstName, user.lastName].filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase() || 'U';
+        const selected = state.portalWizard.selectedUserIds.includes(user.id);
+        return `<label class="user-row ${selected ? 'is-selected' : ''}"><input type="checkbox" data-wizard-user-id="${user.id}" ${selected ? 'checked' : ''}><span class="user-avatar">${escapeHtml(initials)}</span><span class="user-main"><b>${escapeHtml(user.displayName || 'Без имени')}</b><small>${escapeHtml([user.email, user.workPosition].filter(Boolean).join(' · ') || 'ID ' + user.bitrixUserId)}</small></span><span class="user-id">B24 ID ${escapeHtml(user.bitrixUserId)}</span></label>`;
+    }).join('');
+    els.wizardUsersList.querySelectorAll('[data-wizard-user-id]').forEach(input => input.addEventListener('change', () => input.closest('.user-row')?.classList.toggle('is-selected', input.checked)));
+}
+
+async function runAdminFinalization() {
+    state.portalWizard.adminReady = false;
+    renderPortalWizardStep();
+    resetSetupCheck(els.adminBotCheck, 'Создаю админского бота…');
+    resetSetupCheck(els.adminRoutingCheck, 'Ожидание создания бота');
     try {
-        const result = await api(`/api/admin-portal/${portalId}/${action}`, { method: 'POST' });
-        await loadAll();
-        await loadAdminUsersIfPossible(true);
-        setActivePage('admin');
-        showNotice(els.adminNotice, result.message || fallbackMessage, !result.success);
+        setSetupCheck(els.adminBotCheck, 'loading', 'Создаю админского бота…');
+        const bot = await api(`/api/admin-portal/${state.portalWizard.portalId}/bot/register`, { method: 'POST' });
+        if (!bot.success) throw new Error(bot.message || 'Не удалось создать бота');
+        setSetupCheck(els.adminBotCheck, 'success', 'Бот создан');
+
+        setSetupCheck(els.adminRoutingCheck, 'loading', 'Проверяю маршрутизацию…');
+        const routing = await api(`/api/admin-portal/${state.portalWizard.portalId}/routing/repair`, { method: 'POST' });
+        if (!routing.success) throw new Error(routing.message || 'Маршрутизация не прошла проверку');
+        setSetupCheck(els.adminRoutingCheck, 'success', 'Маршрутизация проверена');
+        state.portalWizard.adminReady = true;
+        renderPortalWizardStep();
     } catch (error) {
-        showNotice(els.adminNotice, error.message || fallbackMessage || 'Операция не выполнена', true);
-    } finally {
-        setLoading(false);
+        const target = els.adminBotCheck.classList.contains('is-success') ? els.adminRoutingCheck : els.adminBotCheck;
+        setSetupCheck(target, 'error', error.message || 'Ошибка настройки');
+        showPortalWizardError(error.message || 'Не удалось завершить техническую настройку');
     }
 }
 
-async function clientAction(portalId, action, fallbackMessage) {
-    setLoading(true);
-    clearNotices();
+async function runClientFinalization() {
+    state.portalWizard.clientReady = false;
+    renderPortalWizardStep();
+    [els.clientWebhookCheck, els.clientBotCheck, els.clientRoutingCheck].forEach(item => resetSetupCheck(item, 'Ожидание запуска'));
     try {
-        const result = await api(`/api/client-portals/${portalId}/${action}`, { method: 'POST' });
+        setSetupCheck(els.clientWebhookCheck, 'loading', 'Проверяю webhook…');
+        const connection = await api(`/api/client-portals/${state.portalWizard.portalId}/test-connection`, { method: 'POST' });
+        if (!connection.success) throw new Error(connection.message || 'Webhook не прошёл проверку');
+        setSetupCheck(els.clientWebhookCheck, 'success', 'Webhook проверен');
+
+        setSetupCheck(els.clientBotCheck, 'loading', 'Создаю клиентского бота…');
+        const bot = await api(`/api/client-portals/${state.portalWizard.portalId}/bot/register`, { method: 'POST' });
+        if (!bot.success) throw new Error(bot.message || 'Не удалось создать клиентского бота');
+        setSetupCheck(els.clientBotCheck, 'success', 'Клиентский бот создан');
+
+        setSetupCheck(els.clientRoutingCheck, 'loading', 'Проверяю маршрутизацию…');
+        const routing = await api(`/api/client-portals/${state.portalWizard.portalId}/routing/repair`, { method: 'POST' });
+        if (!routing.success) throw new Error(routing.message || 'Маршрутизация не прошла проверку');
+        setSetupCheck(els.clientRoutingCheck, 'success', 'Маршрутизация проверена');
+        state.portalWizard.clientReady = true;
+        renderPortalWizardStep();
+    } catch (error) {
+        const targets = [els.clientWebhookCheck, els.clientBotCheck, els.clientRoutingCheck];
+        const target = targets.find(item => !item.classList.contains('is-success')) || els.clientRoutingCheck;
+        setSetupCheck(target, 'error', error.message || 'Ошибка настройки');
+        showPortalWizardError(error.message || 'Не удалось завершить настройку клиентского портала');
+    }
+}
+
+async function handleWizardCrmToggle() {
+    const checked = els.wizardConnectCrm.checked;
+    els.wizardCrmSelectGroup.classList.toggle('d-none', !checked);
+    if (!checked || state.portalWizard.processes.length) return;
+    els.wizardCrmProcessSelect.innerHTML = '<option>Загрузка…</option>';
+    els.wizardCrmProcessSelect.disabled = true;
+    try {
+        const processes = await api(`/api/admin-portal/${state.portalWizard.portalId}/crm/processes`);
+        state.portalWizard.processes = (processes || []).filter(item => item.eligible);
+        if (!state.portalWizard.processes.length) throw new Error('Нет доступных смарт-процессов со стадиями и клиентами');
+        els.wizardCrmProcessSelect.innerHTML = state.portalWizard.processes.map(item => `<option value="${item.entityTypeId}">${escapeHtml(item.title)}</option>`).join('');
+        els.wizardCrmProcessSelect.disabled = false;
+    } catch (error) {
+        els.wizardCrmProcessSelect.innerHTML = '<option value="">Не удалось загрузить</option>';
+        els.wizardCrmHint.textContent = error.message || 'Не удалось загрузить смарт-процессы';
+        showPortalWizardError(error.message || 'Не удалось загрузить смарт-процессы');
+    }
+}
+
+async function portalWizardFinish() {
+    if (state.portalWizard.running) return;
+    if (state.portalWizard.role === 'ADMIN' && !state.portalWizard.adminReady) return;
+    if (state.portalWizard.role === 'CLIENT' && !state.portalWizard.clientReady) return;
+
+    try {
+        setPortalWizardRunning(true);
+        if (state.portalWizard.role === 'ADMIN' && els.wizardConnectCrm.checked) {
+            const entityTypeId = Number(els.wizardCrmProcessSelect.value);
+            if (!Number.isFinite(entityTypeId)) throw new Error('Выбери смарт-процесс');
+            await autoConfigureCrm(state.portalWizard.portalId, entityTypeId);
+        }
+        const portalId = state.portalWizard.portalId;
+        closePortalWizardForce();
+        state.selectedPortalId = portalId;
         await loadAll();
         setActivePage('portals');
-        showNotice(els.portalNotice, result.message || fallbackMessage, !result.success);
+        showWorkspaceNotice('Портал полностью настроен', false);
     } catch (error) {
-        showNotice(els.portalNotice, error.message || fallbackMessage || 'Операция не выполнена', true);
+        showPortalWizardError(error.message || 'Не удалось завершить настройку');
     } finally {
-        setLoading(false);
+        setPortalWizardRunning(false);
     }
 }
 
-async function loadAdminUsersIfPossible(forceRender) {
-    const portal = state.adminSummary?.adminPortal;
-    if (!portal) {
-        state.adminUsers = [];
-        if (forceRender) renderAdminUsers();
-        return;
-    }
+async function autoConfigureCrm(portalId, entityTypeId) {
+    const categories = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories`);
+    if (!categories?.length) throw new Error('У смарт-процесса нет доступной воронки');
+    const category = categories.find(item => item.defaultCategory) || categories[0];
+    const stages = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories/${category.id}/stages`);
+    if (!stages?.length) throw new Error('У выбранного смарт-процесса нет стадий');
+    const open = pickOpenStage(stages);
+    const closed = pickClosedStage(stages);
+    if (!open || !closed) throw new Error('Не удалось автоматически определить рабочую и завершающую стадии');
 
-    try {
-        const result = await api(`/api/admin-portal/${portal.id}/users`);
-        state.adminUsers = result.users || [];
-        if (forceRender || state.page === 'admin') renderAdminUsers();
-    } catch (error) {
-        state.adminUsers = [];
-        if (forceRender) showNotice(els.adminNotice, error.message || 'Не удалось прочитать сотрудников', true);
-    }
+    const selectedDbId = state.portalWizard.selectedUserIds[0];
+    const responsible = state.adminUsers.find(item => item.id === selectedDbId) || state.adminUsers.find(item => item.supportMember) || state.adminUsers.find(item => item.active);
+    if (!responsible?.bitrixUserId) throw new Error('Не удалось определить ответственного сотрудника');
+
+    await api(`/api/admin-portal/${portalId}/crm/config`, {
+        method: 'PUT',
+        body: JSON.stringify({
+            entityTypeId,
+            categoryId: category.id,
+            openStageId: open.id,
+            closedStageId: closed.id,
+            responsibleUserId: responsible.bitrixUserId
+        })
+    });
 }
 
-async function saveSupportUsers(portalId) {
-    const checked = [...document.querySelectorAll('[data-support-user-id]:checked')]
-        .map(input => Number(input.dataset.supportUserId))
-        .filter(Number.isFinite);
-
-    setLoading(true);
-    clearNotices();
-    try {
-        const result = await api(`/api/admin-portal/${portalId}/support-users`, {
-            method: 'PUT',
-            body: JSON.stringify({ userIds: checked })
-        });
-        state.adminUsers = result.users || [];
-        await loadAll();
-        setActivePage('admin');
-        showNotice(els.adminNotice, 'Список операторов поддержки сохранён', false);
-    } catch (error) {
-        showNotice(els.adminNotice, error.message || 'Не удалось сохранить сотрудников', true);
-    } finally {
-        setLoading(false);
-    }
+function pickOpenStage(stages) {
+    const process = stages.filter(item => String(item.semantics).toUpperCase() === 'PROCESS');
+    return process.find(item => normalizeText(item.name).includes('в работе')) || process[0] || stages[0];
 }
 
-
-async function loadCrmConfigIfPossible(forceRender) {
-    const portal = state.adminSummary?.adminPortal;
-    if (!portal) {
-        state.crmConfig = null;
-        return;
-    }
-    try {
-        state.crmConfig = await api(`/api/admin-portal/${portal.id}/crm/config`);
-        if (forceRender || state.page === 'admin') renderAdminPanel();
-    } catch (error) {
-        state.crmConfig = null;
-        if (forceRender) showNotice(els.adminNotice, error.message || 'Не удалось прочитать CRM-настройки', true);
-    }
+function pickClosedStage(stages) {
+    const success = stages.filter(item => String(item.semantics).toUpperCase() === 'SUCCESS');
+    return success.find(item => normalizeText(item.name).includes('заверш')) || success[0] || stages[stages.length - 1];
 }
 
-function updatePortalRoleFields() {
-    const isClient = els.portalRole.value === 'CLIENT';
-    els.portalClientPhoneGroup.classList.toggle('d-none', !isClient);
-    els.portalClientPhone.required = isClient;
+function setWizardBanner(text, type) {
+    els.wizardConnectionState.textContent = text;
+    els.wizardConnectionState.className = `wizard-banner is-${type}`;
+}
+
+function resetSetupCheck(element, text) { setSetupCheck(element, 'pending', text); }
+function setSetupCheck(element, stateName, text) {
+    element.className = `setup-check is-${stateName}`;
+    element.querySelector('.setup-check-icon').textContent = stateName === 'success' ? '✓' : stateName === 'error' ? '!' : stateName === 'loading' ? '…' : '•';
+    element.querySelector('small').textContent = text;
+}
+
+function setPortalWizardRunning(running) {
+    state.portalWizard.running = running;
+    [els.btnPortalWizardCancel, els.btnPortalWizardBack, els.btnPortalWizardNext, els.btnPortalWizardFinish].forEach(button => button.disabled = running);
+}
+
+function closePortalWizardForce() {
+    state.portalWizard.running = false;
+    els.portalModal.classList.add('d-none');
+    els.portalModal.setAttribute('aria-hidden', 'true');
+    state.portalWizard = createEmptyPortalWizard();
+}
+
+function showPortalWizardError(message) {
+    els.portalWizardError.textContent = message;
+    els.portalWizardError.classList.remove('d-none');
+}
+function clearPortalWizardError() {
+    els.portalWizardError.textContent = '';
+    els.portalWizardError.classList.add('d-none');
 }
 
 async function openCrmModal(portalId) {
@@ -659,20 +809,18 @@ async function openCrmModal(portalId) {
     clearCrmWizardError();
     els.crmModal.classList.remove('d-none');
     els.crmModal.setAttribute('aria-hidden', 'false');
+    renderCrmWizardStep();
     setCrmWizardLoading(true);
     try {
         const processes = await api(`/api/admin-portal/${portalId}/crm/processes`);
         state.crmWizard.processes = processes || [];
         const eligible = state.crmWizard.processes.filter(item => item.eligible);
-        if (!eligible.length) throw new Error('Нет доступных смарт-процессов со стадиями и поддержкой клиентов');
+        if (!eligible.length) throw new Error('Нет доступных смарт-процессов');
         els.crmProcessSelect.innerHTML = eligible.map(item => `<option value="${item.entityTypeId}">${escapeHtml(item.title)}</option>`).join('');
         if (state.crmConfig?.configured) els.crmProcessSelect.value = String(state.crmConfig.entityTypeId);
-        renderCrmWizardStep();
     } catch (error) {
         showCrmWizardError(error.message || 'Не удалось загрузить смарт-процессы');
-    } finally {
-        setCrmWizardLoading(false);
-    }
+    } finally { setCrmWizardLoading(false); }
 }
 
 function closeCrmModal() {
@@ -682,30 +830,26 @@ function closeCrmModal() {
 
 async function crmWizardNext() {
     clearCrmWizardError();
-    const portalId = state.crmWizard.portalId;
     setCrmWizardLoading(true);
     try {
         if (state.crmWizard.step === 1) {
             const entityTypeId = Number(els.crmProcessSelect.value);
             state.crmWizard.entityTypeId = entityTypeId;
-            state.crmWizard.categories = await api(`/api/admin-portal/${portalId}/crm/processes/${entityTypeId}/categories`);
-            if (!state.crmWizard.categories.length) throw new Error('У выбранного смарт-процесса нет доступных воронок');
+            state.crmWizard.categories = await api(`/api/admin-portal/${state.crmWizard.portalId}/crm/processes/${entityTypeId}/categories`);
+            if (!state.crmWizard.categories.length) throw new Error('Нет доступных воронок');
             els.crmCategorySelect.innerHTML = state.crmWizard.categories.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
             if (state.crmConfig?.configured && Number(state.crmConfig.entityTypeId) === entityTypeId) els.crmCategorySelect.value = String(state.crmConfig.categoryId);
             state.crmWizard.step = 2;
         } else if (state.crmWizard.step === 2) {
             const categoryId = Number(els.crmCategorySelect.value);
             state.crmWizard.categoryId = categoryId;
-            state.crmWizard.stages = await api(`/api/admin-portal/${portalId}/crm/processes/${state.crmWizard.entityTypeId}/categories/${categoryId}/stages`);
-            if (!state.crmWizard.stages.length) throw new Error('В выбранной воронке не найдены стадии');
-            const processStages = state.crmWizard.stages.filter(item => item.semantics === 'PROCESS');
-            const successStages = state.crmWizard.stages.filter(item => item.semantics === 'SUCCESS');
-            const openOptions = processStages.length ? processStages : state.crmWizard.stages;
-            const closeOptions = successStages.length ? successStages : state.crmWizard.stages;
-            els.crmOpenStageSelect.innerHTML = openOptions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
-            els.crmClosedStageSelect.innerHTML = closeOptions.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
-            els.crmResponsibleSelect.innerHTML = state.adminUsers.filter(item => item.active).map(item => `<option value="${escapeHtml(item.bitrixUserId)}">${escapeHtml(item.displayName || 'ID ' + item.bitrixUserId)}</option>`).join('');
-            if (!els.crmResponsibleSelect.options.length) throw new Error('Сначала загрузи сотрудников админского портала');
+            state.crmWizard.stages = await api(`/api/admin-portal/${state.crmWizard.portalId}/crm/processes/${state.crmWizard.entityTypeId}/categories/${categoryId}/stages`);
+            const processStages = state.crmWizard.stages.filter(item => String(item.semantics).toUpperCase() === 'PROCESS');
+            const successStages = state.crmWizard.stages.filter(item => String(item.semantics).toUpperCase() === 'SUCCESS');
+            els.crmOpenStageSelect.innerHTML = (processStages.length ? processStages : state.crmWizard.stages).map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+            els.crmClosedStageSelect.innerHTML = (successStages.length ? successStages : state.crmWizard.stages).map(item => `<option value="${escapeAttribute(item.id)}">${escapeHtml(item.name)}</option>`).join('');
+            els.crmResponsibleSelect.innerHTML = state.adminUsers.filter(item => item.active).map(item => `<option value="${escapeAttribute(item.bitrixUserId)}">${escapeHtml(item.displayName || 'ID ' + item.bitrixUserId)}</option>`).join('');
+            if (!els.crmResponsibleSelect.options.length) throw new Error('Сначала загрузи сотрудников');
             if (state.crmConfig?.configured && Number(state.crmConfig.categoryId) === categoryId) {
                 els.crmOpenStageSelect.value = state.crmConfig.openStageId;
                 els.crmClosedStageSelect.value = state.crmConfig.closedStageId;
@@ -714,11 +858,8 @@ async function crmWizardNext() {
             state.crmWizard.step = 3;
         }
         renderCrmWizardStep();
-    } catch (error) {
-        showCrmWizardError(error.message || 'Не удалось перейти к следующему шагу');
-    } finally {
-        setCrmWizardLoading(false);
-    }
+    } catch (error) { showCrmWizardError(error.message || 'Не удалось перейти к следующему шагу'); }
+    finally { setCrmWizardLoading(false); }
 }
 
 function crmWizardBack() {
@@ -742,262 +883,84 @@ async function saveCrmConfiguration() {
     clearCrmWizardError();
     setCrmWizardLoading(true);
     try {
-        const payload = {
-            entityTypeId: state.crmWizard.entityTypeId,
-            categoryId: state.crmWizard.categoryId,
-            openStageId: els.crmOpenStageSelect.value,
-            closedStageId: els.crmClosedStageSelect.value,
-            responsibleUserId: els.crmResponsibleSelect.value
-        };
-        state.crmConfig = await api(`/api/admin-portal/${state.crmWizard.portalId}/crm/config`, { method: 'PUT', body: JSON.stringify(payload) });
+        state.crmConfig = await api(`/api/admin-portal/${state.crmWizard.portalId}/crm/config`, {
+            method: 'PUT',
+            body: JSON.stringify({
+                entityTypeId: state.crmWizard.entityTypeId,
+                categoryId: state.crmWizard.categoryId,
+                openStageId: els.crmOpenStageSelect.value,
+                closedStageId: els.crmClosedStageSelect.value,
+                responsibleUserId: els.crmResponsibleSelect.value
+            })
+        });
         closeCrmModal();
-        renderAdminPanel();
-        showNotice(els.adminNotice, 'Интеграция со смарт-процессом сохранена', false);
-    } catch (error) {
-        showCrmWizardError(error.message || 'Не удалось сохранить CRM-интеграцию');
-    } finally {
-        setCrmWizardLoading(false);
-    }
+        renderPortalWorkspace();
+        showWorkspaceNotice('Интеграция со смарт-процессом сохранена', false);
+    } catch (error) { showCrmWizardError(error.message || 'Не удалось сохранить CRM-интеграцию'); }
+    finally { setCrmWizardLoading(false); }
 }
 
 async function validateCrmConfiguration(portalId) {
-    setLoading(true);
-    try {
+    await performWorkspaceOperation(async () => {
         const result = await api(`/api/admin-portal/${portalId}/crm/config/validate`, { method: 'POST' });
         state.crmConfig = result.config;
-        renderAdminPanel();
-        showNotice(els.adminNotice, result.message, !result.success);
-    } catch (error) {
-        showNotice(els.adminNotice, error.message || 'Не удалось проверить CRM-интеграцию', true);
-    } finally {
-        setLoading(false);
-    }
+        renderPortalWorkspace();
+        showWorkspaceNotice(result.message, !result.success);
+    });
 }
 
 function setCrmWizardLoading(loading) {
     els.crmWizardLoading.classList.toggle('d-none', !loading);
     [els.btnCrmBack, els.btnCrmNext, els.btnCrmSave].forEach(button => button.disabled = loading);
 }
-
-function showCrmWizardError(message) {
-    els.crmWizardError.textContent = message;
-    els.crmWizardError.classList.remove('d-none');
-}
-
-function clearCrmWizardError() {
-    els.crmWizardError.textContent = '';
-    els.crmWizardError.classList.add('d-none');
-}
+function showCrmWizardError(message) { els.crmWizardError.textContent = message; els.crmWizardError.classList.remove('d-none'); }
+function clearCrmWizardError() { els.crmWizardError.textContent = ''; els.crmWizardError.classList.add('d-none'); }
 
 function setActivePage(page) {
     state.page = page;
     document.querySelectorAll('.page-section').forEach(section => section.classList.add('d-none'));
-    const target = document.getElementById(`${page}Page`);
-    if (target) target.classList.remove('d-none');
-
-    document.querySelectorAll('.top-nav-link').forEach(button => {
-        button.classList.toggle('active', button.dataset.page === page);
-    });
-
-    if (page === 'admin') renderAdminUsers();
+    document.getElementById(`${page}Page`)?.classList.remove('d-none');
+    document.querySelectorAll('.top-nav-link').forEach(button => button.classList.toggle('active', button.dataset.page === page));
 }
 
-function openPortalModal(portal = {}) {
-    clearFormError();
-    state.editingPortal = portal.id ? portal : null;
-    els.portalModalTitle.textContent = portal.id ? 'Редактировать портал' : 'Добавить портал';
-    els.btnDeletePortal.classList.toggle('d-none', !portal.id);
-
-    els.portalId.value = portal.id || '';
-    els.portalRole.value = portal.role || 'CLIENT';
-    els.portalClientCode.value = portal.clientCode || '';
-    els.portalTitle.value = portal.title || '';
-    els.portalDomain.value = portal.domain || '';
-    els.portalWebhookUrl.value = portal.webhookUrl || '';
-    els.portalClientPhone.value = portal.clientPhone || '';
-    els.portalMemberId.value = portal.memberId || '';
-    els.portalStatus.value = portal.status || 'DRAFT';
-    updatePortalRoleFields();
-
-    const showClientActions = Boolean(portal.id && portal.role === 'CLIENT');
-    if (els.portalClientActions) {
-        els.portalClientActions.classList.toggle('d-none', !showClientActions);
-    }
-    if (els.btnModalClientTest) {
-        els.btnModalClientTest.dataset.portalId = showClientActions ? portal.id : '';
-    }
-    if (els.btnModalClientRegisterBot) {
-        els.btnModalClientRegisterBot.dataset.portalId = showClientActions ? portal.id : '';
-    }
-
-    els.portalModal.classList.remove('d-none');
-    els.portalModal.setAttribute('aria-hidden', 'false');
-    setTimeout(() => els.portalTitle.focus(), 0);
-}
-
-function closePortalModal() {
-    els.portalModal.classList.add('d-none');
-    els.portalModal.setAttribute('aria-hidden', 'true');
-    if (els.portalClientActions) els.portalClientActions.classList.add('d-none');
-    if (els.btnModalClientTest) els.btnModalClientTest.dataset.portalId = '';
-    if (els.btnModalClientRegisterBot) els.btnModalClientRegisterBot.dataset.portalId = '';
-    state.editingPortal = null;
-}
-
-async function savePortalFromForm(event) {
-    event.preventDefault();
-    clearFormError();
-    setLoading(true);
-
-    const id = els.portalId.value;
-    if (els.portalRole.value === 'CLIENT' && !els.portalClientPhone.value.trim()) {
-        showFormError('Для клиентского портала обязательно укажи телефон клиента');
-        setLoading(false);
-        return;
-    }
-    const payload = {
-        role: els.portalRole.value,
-        clientCode: valueOrNull(els.portalClientCode.value),
-        title: els.portalTitle.value.trim(),
-        domain: els.portalDomain.value.trim(),
-        webhookUrl: valueOrNull(els.portalWebhookUrl.value),
-        clientPhone: valueOrNull(els.portalClientPhone.value),
-        memberId: valueOrNull(els.portalMemberId.value),
-        status: els.portalStatus.value
-    };
-
-    try {
-        await api(id ? `/api/portals/${id}` : '/api/portals', {
-            method: id ? 'PUT' : 'POST',
-            body: JSON.stringify(payload)
-        });
-        closePortalModal();
-        await loadAll();
-        setActivePage(payload.role === 'ADMIN' ? 'admin' : 'portals');
-        showNotice(payload.role === 'ADMIN' ? els.adminNotice : els.portalNotice, 'Портал сохранён', false);
-    } catch (error) {
-        showFormError(error.message || 'Не удалось сохранить портал');
-    } finally {
-        setLoading(false);
-    }
-}
-
-async function deleteCurrentPortal() {
-    const id = els.portalId.value;
-    if (!id) return;
-    if (!confirm('Удалить этот портал из реестра?')) return;
-
-    clearFormError();
-    setLoading(true);
-    try {
-        await api(`/api/portals/${id}`, { method: 'DELETE' });
-        closePortalModal();
-        await loadAll();
-        showNotice(els.portalNotice, 'Портал удалён', false);
-    } catch (error) {
-        showFormError(error.message || 'Не удалось удалить портал');
-    } finally {
-        setLoading(false);
-    }
-}
-
-async function api(path, options = {}) {
-    const response = await fetch(path, {
-        cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-        ...options
-    });
-
-    if (response.status === 204) return null;
-
-    const text = await response.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (e) { data = text; }
-
-    if (!response.ok) {
-        const message = data?.detail || data?.message || data?.error || `HTTP ${response.status}`;
-        throw new Error(message);
-    }
-
-    return data;
-}
-
-function setLoading(isLoading) {
-    els.syncIndicator.classList.toggle('d-none', !isLoading);
-    els.btnRefresh.disabled = isLoading;
-}
-
-function findPortal(id) {
-    return state.portals.find(item => String(item.id) === String(id));
-}
-
-function roleLabel(role) {
-    return role === 'ADMIN' ? 'Админский' : 'Клиентский';
-}
-
-function statusLabel(status) {
-    const labels = { DRAFT: 'Черновик', ACTIVE: 'Активен', ERROR: 'Ошибка', DISABLED: 'Отключён' };
-    return labels[status] || status || 'Черновик';
-}
-
-function statusClass(status) {
-    if (status === 'ACTIVE') return 'active';
-    if (status === 'ERROR') return 'error';
-    if (status === 'DISABLED') return 'disabled';
-    return '';
-}
-
-function valueOrNull(value) {
-    const cleaned = String(value || '').trim();
-    return cleaned ? cleaned : null;
-}
-
-function buildInitials(value) {
-    const parts = String(value || '').trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return 'U';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-function clearNotices() {
-    showNotice(els.portalNotice, '', false);
-    showNotice(els.adminNotice, '', false);
-    showNotice(els.messagesNotice, '', false);
-}
-
-function showNotice(element, message, isError) {
-    if (!element) return;
-    element.textContent = message || '';
-    element.classList.toggle('is-visible', !!message);
-    element.classList.toggle('is-error', !!isError);
-}
-
-function showFormError(message) {
-    els.portalFormError.textContent = message;
-    els.portalFormError.classList.remove('d-none');
-}
-
-function clearFormError() {
-    els.portalFormError.textContent = '';
-    els.portalFormError.classList.add('d-none');
-}
+function selectedPortal() { return state.portals.find(item => item.id === state.selectedPortalId) || null; }
+function roleLabel(role) { return role === 'ADMIN' ? 'Админский портал' : 'Клиентский портал'; }
+function statusLabel(status) { return ({ DRAFT: 'Черновик', ACTIVE: 'Активен', ERROR: 'Ошибка', DISABLED: 'Отключён' })[status] || status || '—'; }
+function statusClass(status) { return status === 'ACTIVE' ? 'active' : status === 'ERROR' ? 'error' : status === 'DISABLED' ? 'disabled' : ''; }
+function normalizeText(value) { return String(value || '').trim().toLocaleLowerCase('ru-RU'); }
 
 function formatDateTime(value) {
     if (!value) return '';
-    try {
-        return new Intl.DateTimeFormat('ru-RU', {
-            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-        }).format(new Date(value));
-    } catch (e) {
-        return String(value);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(date);
+}
+
+function setLoading(loading) {
+    els.syncIndicator.classList.toggle('d-none', !loading);
+    els.btnRefresh.disabled = loading;
+}
+
+async function api(url, options = {}) {
+    const headers = { ...(options.headers || {}) };
+    if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+        let message = `HTTP ${response.status}`;
+        try {
+            const data = await response.json();
+            message = data.detail || data.message || data.error || message;
+        } catch (_) {
+            const text = await response.text();
+            if (text) message = text;
+        }
+        throw new Error(message);
     }
+    if (response.status === 204) return null;
+    return response.json();
 }
 
 function escapeHtml(value) {
-    return String(value ?? '')
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    return String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
+function escapeAttribute(value) { return escapeHtml(value); }

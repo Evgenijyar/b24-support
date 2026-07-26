@@ -17,7 +17,6 @@ public record PortalInstallationRequest(
         @Size(max = 255, message = "Название не должно быть длиннее 255 символов")
         String title,
 
-        @NotBlank(message = "Укажите домен Bitrix24")
         @Size(max = 255, message = "Домен не должен быть длиннее 255 символов")
         String domain,
 

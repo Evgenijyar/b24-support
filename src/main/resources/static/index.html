@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>B24 SUPPORT | Control Center</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=020">
+    <link rel="stylesheet" href="style.css?v=030">
 </head>
 <body>
 <div class="app-shell">
@@ -14,11 +14,8 @@
         <div class="brand-header-inner">
             <div class="brand-mark" aria-hidden="true">
                 <svg class="brand-icon" viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6.5 8.5h11"></path>
-                    <path d="M6.5 12h7.8"></path>
-                    <path d="M6.5 15.5h5"></path>
-                    <path d="M17.7 14.2 21 17.5l-3.3 3.3"></path>
-                    <path d="M13.8 17.5H21"></path>
+                    <path d="M6.5 8.5h11"></path><path d="M6.5 12h7.8"></path><path d="M6.5 15.5h5"></path>
+                    <path d="M17.7 14.2 21 17.5l-3.3 3.3"></path><path d="M13.8 17.5H21"></path>
                     <rect x="3" y="4" width="18" height="16" rx="4"></rect>
                 </svg>
             </div>
@@ -30,9 +27,7 @@
         </div>
 
         <nav class="top-nav-menu" aria-label="Разделы B24 Support">
-            <button class="top-nav-link active" type="button" data-page="overview">Обзор</button>
-            <button class="top-nav-link" type="button" data-page="portals">Порталы</button>
-            <button class="top-nav-link" type="button" data-page="admin">Админский портал</button>
+            <button class="top-nav-link active" type="button" data-page="portals">Порталы</button>
             <button class="top-nav-link" type="button" data-page="messages">Сообщения</button>
             <button class="top-nav-link" type="button" data-page="settings">Настройки</button>
         </nav>
@@ -45,7 +40,7 @@
 
     <main class="app-layout">
         <aside class="projects-panel">
-            <div class="panel-section-title">Маршрутизация</div>
+            <div class="panel-section-title">Порталы Bitrix24</div>
             <button id="btnAddPortal" class="history-header" type="button">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
                 <span>Добавить портал</span>
@@ -55,88 +50,17 @@
         </aside>
 
         <section class="workspace-panel">
-            <div id="overviewPage" class="dashboard-zone page-section">
-                <div class="project-workspace wide-workspace">
-                    <div class="workspace-heading">
-                        <div>
-                            <div class="eyebrow">Состояние системы</div>
-                            <h1 class="workspace-title">Техподдержка «Умные продажи»</h1>
-                            <div class="workspace-meta">Маршрутизатор обращений между клиентскими Bitrix24, отдельными чатами специалистов и CRM-тикетами.</div>
-                        </div>
-                        <div class="workspace-actions">
-                            <span id="backendStatePill" class="status-pill">Проверка</span>
-                        </div>
-                    </div>
-
-                    <div class="metrics-grid">
-                        <div class="metric-card"><div class="metric-label">Всего порталов</div><div id="metricTotal" class="metric-value">—</div><div class="metric-hint">админский + клиентские подключения</div></div>
-                        <div class="metric-card"><div class="metric-label">Админский Bitrix24</div><div id="metricAdmin" class="metric-value">—</div><div class="metric-hint">бот, операторы и CRM-интеграция</div></div>
-                        <div class="metric-card"><div class="metric-label">Клиенты</div><div id="metricClients" class="metric-value">—</div><div class="metric-hint">порталы, откуда будут идти обращения</div></div>
-                    </div>
-
-                    <div class="info-grid">
-                        <div class="info-card left-info-card text-start">
-                            <div class="eyebrow">Ближайший шаг</div>
-                            <h2>Подключить админский Bitrix24</h2>
-                            <p>Добавь портал своей компании, проверь webhook, загрузи сотрудников и отметь сотрудников, которые будут добавляться в новые чаты обращений.</p>
-                            <div class="button-row mt-3">
-                                <button class="btn btn-save" type="button" data-open-admin-create>Добавить админский портал</button>
-                                <button class="btn btn-flat" type="button" data-switch-page="admin">Перейти к настройке</button>
-                            </div>
-                        </div>
-
-                        <div class="info-card text-start">
-                            <div class="eyebrow">Backend</div>
-                            <pre id="bootstrapJson" class="json-panel">Загрузка...</pre>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="portalsPage" class="dashboard-zone page-section d-none">
-                <div class="project-workspace wide-workspace">
-                    <div class="workspace-heading transfer-heading">
-                        <div>
-                            <div class="eyebrow">Подключения</div>
-                            <h2 class="workspace-title">Порталы Bitrix24</h2>
-                            <div class="workspace-meta">Реестр порталов. Клиентские обращения создают отдельные чаты в админском Bitrix24 и при настроенной CRM-интеграции — отдельные тикеты.</div>
-                        </div>
-                        <div class="transfer-actions"><button id="btnAddPortalTop" class="btn btn-save" type="button">Добавить портал</button></div>
-                    </div>
-                    <div id="portalNotice" class="bitrix-notice"></div>
-                    <div id="portalCards" class="portal-grid"></div>
-                </div>
-            </div>
-
-            <div id="adminPage" class="dashboard-zone page-section d-none">
-                <div class="project-workspace wide-workspace">
-                    <div class="workspace-heading transfer-heading">
-                        <div>
-                            <div class="eyebrow">Админский Bitrix24</div>
-                            <h2 class="workspace-title">Техподдержка и смарт-процесс</h2>
-                            <div class="workspace-meta">Настрой здесь бота, состав специалистов и автоматическое создание CRM-тикетов.</div>
-                        </div>
-                        <div class="transfer-actions">
-                            <button id="btnAdminCreate" class="btn btn-save" type="button">Добавить админский портал</button>
-                        </div>
-                    </div>
-
-                    <div id="adminNotice" class="bitrix-notice"></div>
-                    <div id="adminPortalPanel"></div>
-                    <div id="adminUsersPanel" class="mt-3"></div>
-                </div>
+            <div id="portalsPage" class="dashboard-zone page-section">
+                <div id="portalWorkspace" class="project-workspace wide-workspace"></div>
             </div>
 
             <div id="messagesPage" class="dashboard-zone page-section d-none">
                 <div class="project-workspace wide-workspace">
-                    <div class="workspace-heading transfer-heading">
+                    <div class="workspace-heading">
                         <div>
                             <div class="eyebrow">Входящие события</div>
                             <h2 class="workspace-title">Журнал сообщений</h2>
-                            <div class="workspace-meta">Здесь появляются сообщения, которые клиентский бот принял и маршрутизировал в отдельный чат обращения и таймлайн CRM-тикета.</div>
-                        </div>
-                        <div class="transfer-actions">
-                            <button class="btn btn-flat" type="button" data-switch-page="portals">К клиентским порталам</button>
+                            <div class="workspace-meta">Сообщения клиентов и ответы специалистов, прошедшие через маршрутизатор.</div>
                         </div>
                     </div>
                     <div id="messagesNotice" class="bitrix-notice"></div>
@@ -150,7 +74,7 @@
                         <div>
                             <div class="eyebrow">Настройки</div>
                             <h2 class="workspace-title">Системные параметры</h2>
-                            <div class="workspace-meta">Инфраструктура работает. Следующие настройки появятся после регистрации ботов и общего чата.</div>
+                            <div class="workspace-meta">Технические параметры текущего backend.</div>
                         </div>
                     </div>
                     <div class="info-card text-start">
@@ -164,88 +88,93 @@
 </div>
 
 <div id="portalModal" class="modal-backdrop-custom d-none" aria-hidden="true">
-    <div class="modal-card modal-custom">
+    <div class="modal-card modal-custom portal-wizard-card" role="dialog" aria-modal="true" aria-labelledby="portalModalTitle">
         <div class="modal-header-custom">
             <div>
-                <div id="portalModalStep" class="modal-step-label">Портал Bitrix24</div>
+                <div id="portalModalStep" class="modal-step-label">Шаг 1</div>
                 <h5 id="portalModalTitle" class="m-0 fw-semibold text-white">Добавить портал</h5>
             </div>
-            <button id="btnClosePortalModal" type="button" class="btn-close-custom">✕</button>
+            <button id="btnClosePortalModal" type="button" class="btn-close-custom" aria-label="Закрыть">✕</button>
         </div>
 
-        <form id="portalForm" class="modal-form">
-            <input id="portalId" type="hidden">
+        <div class="modal-form">
+            <div id="portalWizardError" class="form-error d-none"></div>
 
-            <div class="two-col-form">
-                <div>
-                    <label class="form-label">Тип портала</label>
-                    <select id="portalRole" class="form-select custom-input" required>
-                        <option value="ADMIN">Админский Bitrix24</option>
-                        <option value="CLIENT">Клиентский Bitrix24</option>
-                    </select>
+            <section id="portalWizardStep1" class="portal-wizard-step">
+                <div class="portal-role-options" role="radiogroup" aria-label="Тип портала">
+                    <label class="portal-role-option">
+                        <input type="radio" name="portalRoleChoice" value="ADMIN">
+                        <span><b>Админский портал</b><small>Портал техподдержки, сотрудники, бот и смарт-процесс.</small></span>
+                    </label>
+                    <label class="portal-role-option">
+                        <input type="radio" name="portalRoleChoice" value="CLIENT">
+                        <span><b>Клиентский портал</b><small>Портал клиента, откуда поступают обращения.</small></span>
+                    </label>
                 </div>
-                <div>
-                    <label class="form-label">Код клиента</label>
-                    <input id="portalClientCode" class="form-control custom-input" placeholder="auto / c_00037">
+
+                <label class="form-label mt-3" for="wizardPortalTitle">Название организации</label>
+                <input id="wizardPortalTitle" class="form-control custom-input" placeholder="ООО «Беспилотник Трейд»">
+
+                <label class="form-label mt-3" for="wizardWebhookUrl">Webhook / REST URL</label>
+                <input id="wizardWebhookUrl" class="form-control custom-input" placeholder="https://example.bitrix24.ru/rest/1/xxxxx/">
+                <div class="field-hint">Домен Bitrix24 и внутренний код клиента определяются автоматически.</div>
+
+                <div id="wizardClientPhoneGroup" class="mt-3 d-none">
+                    <label class="form-label" for="wizardClientPhone">Телефон клиента</label>
+                    <input id="wizardClientPhone" class="form-control custom-input" type="tel" placeholder="+7 999 123-45-67">
+                    <div class="field-hint">Обязателен. По этому номеру клиент ищется в CRM админского Bitrix24.</div>
                 </div>
-            </div>
+            </section>
 
-            <label class="form-label mt-3">Название</label>
-            <input id="portalTitle" class="form-control custom-input" placeholder="ООО Ромашка / Умные продажи" required>
-
-            <label class="form-label mt-3">Домен Bitrix24</label>
-            <input id="portalDomain" class="form-control custom-input" placeholder="example.bitrix24.ru" required>
-
-            <div id="portalClientPhoneGroup" class="mt-3 d-none">
-                <label class="form-label">Телефон клиента</label>
-                <input id="portalClientPhone" class="form-control custom-input" type="tel" placeholder="+7 999 123-45-67">
-                <div class="field-hint">Обязателен для клиентского портала. По этому номеру компания ищется в CRM админского Bitrix24.</div>
-            </div>
-
-            <label class="form-label mt-3">Webhook / REST URL</label>
-            <input id="portalWebhookUrl" class="form-control custom-input" placeholder="https://example.bitrix24.ru/rest/1/xxxxx/">
-            <div class="field-hint">Админскому порталу нужны права user, imbot и crm. Клиентскому — user и imbot.</div>
-
-            <div class="two-col-form mt-3">
-                <div>
-                    <label class="form-label">member_id</label>
-                    <input id="portalMemberId" class="form-control custom-input" placeholder="опционально">
+            <section id="portalWizardAdminUsers" class="portal-wizard-step d-none">
+                <div id="wizardConnectionState" class="wizard-banner is-loading">Проверяю подключение к порталу…</div>
+                <div class="wizard-section-head">
+                    <div>
+                        <h3>Сотрудники новых чатов</h3>
+                        <p>Отметь всех сотрудников, которые должны автоматически добавляться в новые чаты обращений.</p>
+                    </div>
                 </div>
-                <div>
-                    <label class="form-label">Статус</label>
-                    <select id="portalStatus" class="form-select custom-input">
-                        <option value="DRAFT">Черновик</option>
-                        <option value="ACTIVE">Активен</option>
-                        <option value="ERROR">Ошибка</option>
-                        <option value="DISABLED">Отключён</option>
-                    </select>
-                </div>
-            </div>
+                <div id="wizardUsersList" class="wizard-users-list"></div>
+            </section>
 
-            <div id="portalFormError" class="form-error d-none"></div>
+            <section id="portalWizardAdminFinalize" class="portal-wizard-step d-none">
+                <div class="setup-checklist">
+                    <div id="adminBotCheck" class="setup-check is-pending"><span class="setup-check-icon">•</span><div><b>Создание админского бота</b><small>Ожидание запуска</small></div></div>
+                    <div id="adminRoutingCheck" class="setup-check is-pending"><span class="setup-check-icon">•</span><div><b>Проверка маршрутизации</b><small>Ожидание запуска</small></div></div>
+                </div>
 
-            <div id="portalClientActions" class="modal-action-panel d-none">
-                <div>
-                    <div class="eyebrow mb-1">Клиентский бот</div>
-                    <div class="field-hint m-0">Для клиентского портала сначала проверь webhook, затем зарегистрируй бота. После регистрации клиент сможет написать боту в Bitrix24.</div>
+                <label class="smart-process-toggle">
+                    <input id="wizardConnectCrm" type="checkbox">
+                    <span><b>Подключить смарт-процесс</b><small>Можно пропустить и настроить позже в карточке админского портала.</small></span>
+                </label>
+
+                <div id="wizardCrmSelectGroup" class="mt-3 d-none">
+                    <label class="form-label" for="wizardCrmProcessSelect">Смарт-процесс</label>
+                    <select id="wizardCrmProcessSelect" class="form-select custom-input"></select>
+                    <div id="wizardCrmHint" class="field-hint">Воронка и стадии будут сопоставлены автоматически. После подключения их можно изменить в настройках портала.</div>
                 </div>
-                <div class="button-row mt-2">
-                    <button id="btnModalClientTest" class="btn btn-flat btn-sm" type="button">Проверить клиентский портал</button>
-                    <button id="btnModalClientRegisterBot" class="btn btn-save btn-sm" type="button">Создать клиентского бота</button>
+            </section>
+
+            <section id="portalWizardClientFinalize" class="portal-wizard-step d-none">
+                <div class="setup-checklist">
+                    <div id="clientWebhookCheck" class="setup-check is-pending"><span class="setup-check-icon">•</span><div><b>Проверка webhook</b><small>Ожидание запуска</small></div></div>
+                    <div id="clientBotCheck" class="setup-check is-pending"><span class="setup-check-icon">•</span><div><b>Создание клиентского бота</b><small>Ожидание запуска</small></div></div>
+                    <div id="clientRoutingCheck" class="setup-check is-pending"><span class="setup-check-icon">•</span><div><b>Проверка маршрутизации</b><small>Ожидание запуска</small></div></div>
                 </div>
-            </div>
+            </section>
 
             <div class="modal-actions">
-                <button id="btnDeletePortal" class="btn btn-danger-soft me-auto d-none" type="button">Удалить</button>
-                <button class="btn btn-flat" type="button" id="btnCancelPortal">Отмена</button>
-                <button class="btn btn-save" type="submit">Сохранить</button>
+                <button id="btnPortalWizardCancel" class="btn btn-flat" type="button">Отмена</button>
+                <button id="btnPortalWizardBack" class="btn btn-flat d-none" type="button">Назад</button>
+                <button id="btnPortalWizardNext" class="btn btn-save" type="button">Далее</button>
+                <button id="btnPortalWizardFinish" class="btn btn-save d-none" type="button">Готово</button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
 <div id="crmModal" class="modal-backdrop-custom d-none" aria-hidden="true">
-    <div class="modal-card modal-custom crm-modal-card">
+    <div class="modal-card modal-custom crm-modal-card" role="dialog" aria-modal="true">
         <div class="modal-header-custom">
             <div>
                 <div id="crmStepLabel" class="modal-step-label">Шаг 1 из 3</div>
@@ -256,34 +185,22 @@
         <div class="modal-form">
             <div id="crmWizardLoading" class="crm-wizard-loading d-none">Загрузка данных из Bitrix24…</div>
             <div id="crmWizardError" class="form-error d-none"></div>
-
             <section id="crmStepProcess" class="crm-wizard-step">
                 <label class="form-label">Смарт-процесс</label>
                 <select id="crmProcessSelect" class="form-select custom-input"></select>
-                <div class="field-hint">Показываются смарт-процессы, доступные webhook админского портала.</div>
             </section>
-
             <section id="crmStepCategory" class="crm-wizard-step d-none">
                 <label class="form-label">Воронка</label>
                 <select id="crmCategorySelect" class="form-select custom-input"></select>
             </section>
-
             <section id="crmStepMapping" class="crm-wizard-step d-none">
                 <div class="two-col-form">
-                    <div>
-                        <label class="form-label">Обращение в работе</label>
-                        <select id="crmOpenStageSelect" class="form-select custom-input"></select>
-                    </div>
-                    <div>
-                        <label class="form-label">Обращение завершено</label>
-                        <select id="crmClosedStageSelect" class="form-select custom-input"></select>
-                    </div>
+                    <div><label class="form-label">Обращение в работе</label><select id="crmOpenStageSelect" class="form-select custom-input"></select></div>
+                    <div><label class="form-label">Обращение завершено</label><select id="crmClosedStageSelect" class="form-select custom-input"></select></div>
                 </div>
                 <label class="form-label mt-3">Ответственный</label>
                 <select id="crmResponsibleSelect" class="form-select custom-input"></select>
-                <div class="field-hint">Ответственный выбирается из активных сотрудников, ранее загруженных из админского Bitrix24.</div>
             </section>
-
             <div class="modal-actions">
                 <button id="btnCrmBack" class="btn btn-flat d-none" type="button">Назад</button>
                 <button id="btnCrmNext" class="btn btn-save" type="button">Далее</button>
@@ -293,6 +210,6 @@
     </div>
 </div>
 
-<script src="script.js?v=020"></script>
+<script src="script.js?v=030"></script>
 </body>
 </html>

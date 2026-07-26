@@ -12,6 +12,7 @@ import ru.abs7.b24support.domain.PortalInstallation;
 import ru.abs7.b24support.domain.PortalRole;
 import ru.abs7.b24support.domain.PortalStatus;
 import ru.abs7.b24support.repo.PortalInstallationRepository;
+import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -53,7 +54,7 @@ public class PortalInstallationService {
     @Transactional
     public PortalInstallationResponse create(PortalInstallationRequest request) {
         PortalRole role = request.role();
-        String domain = normalizeDomain(request.domain());
+        String domain = resolveDomain(request.domain(), request.webhookUrl());
         String clientCode = normalizeClientCode(request.clientCode(), role);
 
         validateAdminUniqueness(null, role);
@@ -81,7 +82,7 @@ public class PortalInstallationService {
     public PortalInstallationResponse update(Long id, PortalInstallationRequest request) {
         PortalInstallation installation = findRequired(id);
         PortalRole role = request.role();
-        String domain = normalizeDomain(request.domain());
+        String domain = resolveDomain(request.domain(), request.webhookUrl());
         String clientCode = normalizeClientCode(request.clientCode(), role);
 
         validateAdminUniqueness(id, role);
@@ -190,6 +191,30 @@ public class PortalInstallationService {
             leadingPlus = true;
         }
         return (leadingPlus || digits.length() >= 10 ? "+" : "") + digits;
+    }
+
+
+    private String resolveDomain(String domainValue, String webhookUrl) {
+        String explicitDomain = cleanNullable(domainValue);
+        if (explicitDomain != null) {
+            return normalizeDomain(explicitDomain);
+        }
+
+        String webhook = cleanNullable(webhookUrl);
+        if (webhook == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите Webhook / REST URL Bitrix24");
+        }
+
+        try {
+            URI uri = URI.create(webhook);
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) {
+                throw new IllegalArgumentException("host is empty");
+            }
+            return normalizeDomain(host);
+        } catch (RuntimeException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Не удалось определить домен Bitrix24 из Webhook URL");
+        }
     }
 
     private String normalizeDomain(String value) {
