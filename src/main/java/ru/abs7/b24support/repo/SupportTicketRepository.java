@@ -24,6 +24,8 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
 
     List<SupportTicket> findTop100ByOrderByOpenedAtDesc();
 
+    List<SupportTicket> findTop100ByClientInstallation_IdOrderByOpenedAtDesc(Long clientInstallationId);
+
     List<SupportTicket> findTop50ByCrmSyncStatusInOrderByIdAsc(Collection<CrmSyncStatus> statuses);
 
     List<SupportTicket> findAllByStatusAndDeleteAfterLessThanEqualOrderByDeleteAfterAsc(

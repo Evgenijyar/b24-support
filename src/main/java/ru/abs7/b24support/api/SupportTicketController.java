@@ -8,7 +8,10 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import ru.abs7.b24support.api.dto.conversation.SupportConversationListResponse;
+import ru.abs7.b24support.api.dto.conversation.SupportConversationMessageListResponse;
 import ru.abs7.b24support.api.dto.ticket.CloseTicketRequest;
 import ru.abs7.b24support.api.dto.ticket.SupportSettingsRequest;
 import ru.abs7.b24support.api.dto.ticket.SupportSettingsResponse;
@@ -16,6 +19,7 @@ import ru.abs7.b24support.api.dto.ticket.SupportTicketListResponse;
 import ru.abs7.b24support.api.dto.ticket.SupportTicketResponse;
 import ru.abs7.b24support.api.dto.ticket.TicketActionResponse;
 import ru.abs7.b24support.service.SupportActionGuard;
+import ru.abs7.b24support.service.SupportConversationService;
 import ru.abs7.b24support.service.SupportSettingsService;
 import ru.abs7.b24support.service.SupportTicketService;
 
@@ -28,18 +32,31 @@ public class SupportTicketController {
     private final SupportTicketService ticketService;
     private final SupportSettingsService settingsService;
     private final SupportActionGuard actionGuard;
+    private final SupportConversationService conversationService;
 
     public SupportTicketController(SupportTicketService ticketService,
                                    SupportSettingsService settingsService,
-                                   SupportActionGuard actionGuard) {
+                                   SupportActionGuard actionGuard,
+                                   SupportConversationService conversationService) {
         this.ticketService = ticketService;
         this.settingsService = settingsService;
         this.actionGuard = actionGuard;
+        this.conversationService = conversationService;
     }
 
     @GetMapping("/tickets")
     public SupportTicketListResponse recentTickets() {
         return ticketService.recent();
+    }
+
+    @GetMapping("/conversations")
+    public SupportConversationListResponse conversations(@RequestParam Long portalId) {
+        return conversationService.list(portalId);
+    }
+
+    @GetMapping("/conversations/{ticketId}/messages")
+    public SupportConversationMessageListResponse conversationMessages(@PathVariable Long ticketId) {
+        return conversationService.messages(ticketId);
     }
 
     @GetMapping("/tickets/{ticketId}")

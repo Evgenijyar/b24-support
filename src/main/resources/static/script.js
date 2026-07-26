@@ -6,7 +6,10 @@ const state = {
     adminSummary: null,
     adminUsers: [],
     crmConfig: null,
-    clientMessages: [],
+    conversations: [],
+    selectedConversationId: null,
+    conversationMessages: [],
+    pendingDeletePortalId: null,
     selectedPortalId: null,
     portalWizard: createEmptyPortalWizard(),
     crmWizard: { step: 1, processes: [], categories: [], stages: [] }
@@ -42,7 +45,11 @@ function cacheElements() {
     els.portalNavList = document.getElementById('portalNavList');
     els.portalWorkspace = document.getElementById('portalWorkspace');
     els.messagesNotice = document.getElementById('messagesNotice');
-    els.messagesList = document.getElementById('messagesList');
+    els.messagesPortalTitle = document.getElementById('messagesPortalTitle');
+    els.messagesPortalMeta = document.getElementById('messagesPortalMeta');
+    els.conversationCount = document.getElementById('conversationCount');
+    els.conversationList = document.getElementById('conversationList');
+    els.conversationThread = document.getElementById('conversationThread');
     els.publicBaseUrl = document.getElementById('publicBaseUrl');
 
     els.portalModal = document.getElementById('portalModal');
@@ -73,6 +80,13 @@ function cacheElements() {
     els.btnPortalWizardNext = document.getElementById('btnPortalWizardNext');
     els.btnPortalWizardFinish = document.getElementById('btnPortalWizardFinish');
 
+    els.deletePortalModal = document.getElementById('deletePortalModal');
+    els.deletePortalName = document.getElementById('deletePortalName');
+    els.deletePortalError = document.getElementById('deletePortalError');
+    els.btnCloseDeletePortalModal = document.getElementById('btnCloseDeletePortalModal');
+    els.btnCancelDeletePortal = document.getElementById('btnCancelDeletePortal');
+    els.btnConfirmDeletePortal = document.getElementById('btnConfirmDeletePortal');
+
     els.crmModal = document.getElementById('crmModal');
     els.crmStepLabel = document.getElementById('crmStepLabel');
     els.crmWizardLoading = document.getElementById('crmWizardLoading');
@@ -92,7 +106,13 @@ function cacheElements() {
 
 function bindEvents() {
     document.querySelectorAll('[data-page]').forEach(button => {
-        button.addEventListener('click', () => setActivePage(button.dataset.page));
+        button.addEventListener('click', async () => {
+            setActivePage(button.dataset.page);
+            if (button.dataset.page === 'messages') {
+                await loadConversationContext();
+                renderMessages();
+            }
+        });
     });
 
     document.getElementById('btnAddPortal').addEventListener('click', openPortalWizard);
@@ -111,16 +131,37 @@ function bindEvents() {
 
     els.btnRefresh.addEventListener('click', loadAll);
     els.portalNavList.addEventListener('click', async event => {
+        const deleteButton = event.target.closest('[data-nav-delete-portal]');
+        if (deleteButton) {
+            event.stopPropagation();
+            openDeletePortalModal(Number(deleteButton.dataset.navDeletePortal));
+            return;
+        }
         const item = event.target.closest('[data-portal-id]');
         if (!item) return;
         state.selectedPortalId = Number(item.dataset.portalId);
-        await loadSelectedPortalContext();
+        state.selectedConversationId = null;
+        await Promise.all([loadSelectedPortalContext(), loadConversationContext()]);
         renderPortalNav();
         renderPortalWorkspace();
-        setActivePage('portals');
+        renderMessages();
+    });
+    els.conversationList.addEventListener('click', async event => {
+        const item = event.target.closest('[data-conversation-id]');
+        if (!item) return;
+        state.selectedConversationId = Number(item.dataset.conversationId);
+        await loadConversationMessages();
+        renderMessages();
     });
     els.portalWorkspace.addEventListener('click', handleWorkspaceClick);
     els.portalWorkspace.addEventListener('submit', handleWorkspaceSubmit);
+
+    els.btnCloseDeletePortalModal.addEventListener('click', closeDeletePortalModal);
+    els.btnCancelDeletePortal.addEventListener('click', closeDeletePortalModal);
+    els.btnConfirmDeletePortal.addEventListener('click', confirmDeletePortal);
+    els.deletePortalModal.addEventListener('click', event => {
+        if (event.target === els.deletePortalModal) closeDeletePortalModal();
+    });
 
     document.getElementById('btnCloseCrmModal').addEventListener('click', closeCrmModal);
     els.crmModal.addEventListener('click', event => { if (event.target === els.crmModal) closeCrmModal(); });
@@ -132,22 +173,20 @@ function bindEvents() {
 async function loadAll() {
     setLoading(true);
     try {
-        const [bootstrap, portals, adminSummary, messages] = await Promise.all([
+        const [bootstrap, portals, adminSummary] = await Promise.all([
             api('/api/bootstrap/status'),
             api('/api/portals'),
-            api('/api/admin-portal/summary'),
-            api('/api/client-portals/messages')
+            api('/api/admin-portal/summary')
         ]);
         state.bootstrap = bootstrap;
         state.portals = sortPortals(portals.items || []);
         state.portalStats = portals;
         state.adminSummary = adminSummary;
-        state.clientMessages = messages.items || [];
 
         if (!state.selectedPortalId || !state.portals.some(item => item.id === state.selectedPortalId)) {
             state.selectedPortalId = state.portals[0]?.id || null;
         }
-        await loadSelectedPortalContext();
+        await Promise.all([loadSelectedPortalContext(), loadConversationContext()]);
         renderAll();
     } catch (error) {
         renderFatalWorkspace(error.message || 'Не удалось загрузить данные');
@@ -182,6 +221,40 @@ async function loadSelectedPortalContext() {
     }
 }
 
+async function loadConversationContext() {
+    const portal = selectedPortal();
+    state.conversations = [];
+    state.conversationMessages = [];
+    if (!portal) {
+        state.selectedConversationId = null;
+        return;
+    }
+
+    try {
+        const result = await api(`/api/support/conversations?portalId=${portal.id}`);
+        state.conversations = result.items || [];
+        if (!state.selectedConversationId || !state.conversations.some(item => item.ticketId === state.selectedConversationId)) {
+            state.selectedConversationId = state.conversations[0]?.ticketId || null;
+        }
+        await loadConversationMessages();
+    } catch (error) {
+        state.conversations = [];
+        state.conversationMessages = [];
+        state.selectedConversationId = null;
+        showMessagesNotice(error.message || 'Не удалось загрузить историю обращений', true);
+    }
+}
+
+async function loadConversationMessages() {
+    if (!state.selectedConversationId) {
+        state.conversationMessages = [];
+        return;
+    }
+    const result = await api(`/api/support/conversations/${state.selectedConversationId}/messages`);
+    state.conversationMessages = result.items || [];
+}
+
+
 function renderAll() {
     renderPortalNav();
     renderPortalWorkspace();
@@ -195,11 +268,14 @@ function renderPortalNav() {
         return;
     }
     els.portalNavList.innerHTML = state.portals.map(portal => `
-        <button class="history-item ${portal.id === state.selectedPortalId ? 'is-active' : ''}" type="button" data-portal-id="${portal.id}">
-            <span class="history-item-title">${escapeHtml(portal.title)}</span>
-            <span class="history-item-meta">${escapeHtml(portal.domain || 'Домен не определён')}</span>
-            <span class="${portal.role === 'ADMIN' ? 'history-item-admin' : 'history-item-client'}">${roleLabel(portal.role)} · ${statusLabel(portal.status)}</span>
-        </button>
+        <div class="portal-nav-row ${portal.id === state.selectedPortalId ? 'is-active' : ''}">
+            <button class="history-item" type="button" data-portal-id="${portal.id}">
+                <span class="history-item-title">${escapeHtml(portal.title)}</span>
+                <span class="history-item-meta">${escapeHtml(portal.domain || 'Домен не определён')}</span>
+                <span class="${portal.role === 'ADMIN' ? 'history-item-admin' : 'history-item-client'}">${roleLabel(portal.role)} · ${statusLabel(portal.status)}</span>
+            </button>
+            <button class="portal-nav-delete" type="button" data-nav-delete-portal="${portal.id}" aria-label="Удалить ${escapeAttribute(portal.title)}" title="Удалить портал">✕</button>
+        </div>
     `).join('');
 }
 
@@ -223,7 +299,10 @@ function renderPortalWorkspace() {
                 <h1 class="workspace-title">${escapeHtml(portal.title)}</h1>
                 <div class="workspace-meta">${escapeHtml(portal.domain || 'Домен определяется из webhook')}</div>
             </div>
-            <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
+            <div class="workspace-actions">
+                <span class="status-pill ${statusClass(portal.status)}">${statusLabel(portal.status)}</span>
+                <button class="btn btn-danger-soft" type="button" data-delete-portal="${portal.id}">Удалить</button>
+            </div>
         </div>
         <div id="workspaceNotice" class="bitrix-notice"></div>
         ${portal.role === 'ADMIN' ? renderAdminPortalWorkspace(portal) : renderClientPortalWorkspace(portal)}
@@ -254,7 +333,6 @@ function renderGeneralSettings(portal) {
                 </div>
                 ${portal.lastError ? `<div class="error-panel mt-3">${escapeHtml(portal.lastError)}</div>` : ''}
                 <div class="settings-actions">
-                    <button class="btn btn-danger-soft me-auto" type="button" data-delete-portal="${portal.id}">Удалить портал</button>
                     <button class="btn btn-save" type="submit">Сохранить изменения</button>
                 </div>
             </form>
@@ -357,15 +435,83 @@ function renderUserRow(user) {
 }
 
 function renderMessages() {
-    if (!state.clientMessages.length) {
-        els.messagesList.innerHTML = '<div class="empty-state text-center"><h2 class="fw-semibold text-white mb-2">Журнал сообщений пуст</h2><p class="text-secondary">Сообщения появятся после первого обращения клиента.</p></div>';
+    const portal = selectedPortal();
+    if (!portal) {
+        els.messagesPortalTitle.textContent = 'Выберите портал';
+        els.messagesPortalMeta.textContent = 'Слева выберите портал, чтобы открыть его обращения.';
+        els.conversationCount.textContent = '0';
+        els.conversationList.innerHTML = '<div class="conversation-empty">Портал не выбран.</div>';
+        els.conversationThread.innerHTML = '<div class="thread-empty"><b>Нет выбранного портала</b><span>Выберите портал в левой колонке.</span></div>';
         return;
     }
-    els.messagesList.innerHTML = `<div class="messages-list">${state.clientMessages.map(message => `
-        <article class="message-card">
-            <div class="message-card-head"><div><div class="eyebrow">${escapeHtml(message.clientPortalTitle || 'Клиент')}</div><h3>${escapeHtml(message.senderName || 'Клиент')}</h3><div class="portal-domain">${formatDateTime(message.createdAt) || '—'}</div></div><span class="status-pill ${message.status === 'FORWARDED' ? 'active' : message.status === 'ERROR' ? 'error' : ''}">${escapeHtml(message.status || 'NEW')}</span></div>
-            <div class="message-text">${escapeHtml(message.text || '')}</div>
-        </article>`).join('')}</div>`;
+
+    els.messagesPortalTitle.textContent = portal.title;
+    els.messagesPortalMeta.textContent = portal.role === 'ADMIN'
+        ? `${portal.domain || ''} · все обращения клиентских порталов`
+        : `${portal.domain || ''} · история обращений этого клиента`;
+    els.conversationCount.textContent = String(state.conversations.length);
+
+    if (!state.conversations.length) {
+        els.conversationList.innerHTML = '<div class="conversation-empty">Обращений пока нет.</div>';
+        els.conversationThread.innerHTML = '<div class="thread-empty"><b>История обращений пуста</b><span>Переписка появится после первого сообщения клиента.</span></div>';
+        return;
+    }
+
+    els.conversationList.innerHTML = state.conversations.map(conversation => `
+        <button class="conversation-item ${conversation.ticketId === state.selectedConversationId ? 'is-active' : ''}" type="button" data-conversation-id="${conversation.ticketId}">
+            <span class="conversation-item-top"><b>Обращение №${escapeHtml(conversation.sequenceNumber || conversation.ticketId)}</b><small>${formatDateTime(conversation.lastMessageAt) || '—'}</small></span>
+            <span class="conversation-requester">${escapeHtml(conversation.requesterName || 'Клиент')}</span>
+            ${portal.role === 'ADMIN' ? `<span class="conversation-client">${escapeHtml(conversation.clientTitle || 'Клиентский портал')}</span>` : ''}
+            <span class="conversation-preview">${escapeHtml(conversation.lastMessagePreview || '')}</span>
+        </button>
+    `).join('');
+
+    const selected = state.conversations.find(item => item.ticketId === state.selectedConversationId);
+    if (!selected) {
+        els.conversationThread.innerHTML = '<div class="thread-empty"><b>Выберите обращение</b><span>Справа будет показана вся переписка.</span></div>';
+        return;
+    }
+
+    const messages = state.conversationMessages.map(message => renderConversationMessage(message)).join('');
+    els.conversationThread.innerHTML = `
+        <div class="thread-head">
+            <div><div class="eyebrow">${escapeHtml(selected.clientTitle || portal.title)}</div><h3>Обращение №${escapeHtml(selected.sequenceNumber || selected.ticketId)}</h3><span>${escapeHtml(selected.requesterName || 'Клиент')} · открыто ${formatDateTime(selected.openedAt) || '—'}</span></div>
+            <span class="status-pill ${conversationStatusClass(selected.status)}">${conversationStatusLabel(selected.status)}</span>
+        </div>
+        <div class="thread-messages">${messages || '<div class="thread-empty compact"><b>Сообщений пока нет</b></div>'}</div>`;
+    requestAnimationFrame(() => {
+        const container = els.conversationThread.querySelector('.thread-messages');
+        if (container) container.scrollTop = container.scrollHeight;
+    });
+}
+
+function renderConversationMessage(message) {
+    const direction = String(message.direction || 'CLIENT_TO_ADMIN');
+    const kind = direction === 'ADMIN_TO_CLIENT' ? 'support' : direction === 'SYSTEM_TO_CLIENT' ? 'system' : 'client';
+    const role = kind === 'support' ? 'Техподдержка' : kind === 'system' ? 'Система' : 'Клиент';
+    return `
+        <article class="chat-message is-${kind}">
+            <div class="chat-message-meta"><b>${escapeHtml(message.senderName || role)}</b><span>${role} · ${formatDateTime(message.createdAt) || '—'}</span></div>
+            <div class="chat-message-bubble">${formatMessageBody(message.text || '')}</div>
+        </article>`;
+}
+
+function formatMessageBody(value) {
+    return escapeHtml(value).replaceAll('\n', '<br>');
+}
+
+function conversationStatusLabel(status) {
+    return ({ OPENING: 'Создаётся', OPEN: 'В работе', CLOSED: 'Закрыто', DELETING: 'Удаляется', DELETED: 'Чат удалён', ERROR: 'Ошибка' })[status] || status || '—';
+}
+
+function conversationStatusClass(status) {
+    return status === 'OPEN' ? 'active' : status === 'ERROR' ? 'error' : status === 'DELETED' ? 'disabled' : '';
+}
+
+function showMessagesNotice(message, isError) {
+    if (!els.messagesNotice) return;
+    els.messagesNotice.textContent = message;
+    els.messagesNotice.className = `bitrix-notice is-visible ${isError ? 'is-error' : ''}`;
 }
 
 function renderFatalWorkspace(message) {
@@ -385,7 +531,7 @@ async function handleWorkspaceClick(event) {
     if (clientActionName) return runPortalAction(portal, `/api/client-portals/${portal.id}/${clientActionName}`);
     if (event.target.closest('[data-admin-load-users]')) return loadAdminUsers(portal.id, true);
     if (event.target.closest('[data-save-support-users]')) return saveSupportUsersFromWorkspace(portal.id);
-    if (event.target.closest('[data-delete-portal]')) return deletePortal(portal.id);
+    if (event.target.closest('[data-delete-portal]')) return openDeletePortalModal(portal.id);
     if (event.target.closest('[data-resume-setup]')) return openPortalWizard(portal);
 
     const setupId = event.target.closest('[data-crm-setup]')?.dataset.crmSetup;
@@ -453,14 +599,47 @@ async function saveSupportUsersFromWorkspace(portalId) {
     });
 }
 
-async function deletePortal(portalId) {
-    if (!window.confirm('Удалить этот портал из B24 Support?')) return;
-    await performWorkspaceOperation(async () => {
+function openDeletePortalModal(portalId) {
+    const portal = state.portals.find(item => item.id === portalId);
+    if (!portal) return;
+    state.pendingDeletePortalId = portalId;
+    els.deletePortalName.textContent = portal.title;
+    els.deletePortalError.textContent = '';
+    els.deletePortalError.classList.add('d-none');
+    els.deletePortalModal.classList.remove('d-none');
+    els.deletePortalModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeDeletePortalModal() {
+    if (els.btnConfirmDeletePortal.disabled) return;
+    state.pendingDeletePortalId = null;
+    els.deletePortalModal.classList.add('d-none');
+    els.deletePortalModal.setAttribute('aria-hidden', 'true');
+}
+
+async function confirmDeletePortal() {
+    const portalId = state.pendingDeletePortalId;
+    if (!portalId) return;
+    els.btnConfirmDeletePortal.disabled = true;
+    els.btnCancelDeletePortal.disabled = true;
+    els.btnConfirmDeletePortal.textContent = 'Удаляю…';
+    try {
         await api(`/api/portals/${portalId}`, { method: 'DELETE' });
+        state.pendingDeletePortalId = null;
         state.selectedPortalId = null;
+        state.selectedConversationId = null;
+        els.deletePortalModal.classList.add('d-none');
+        els.deletePortalModal.setAttribute('aria-hidden', 'true');
         await loadAll();
-        showWorkspaceNotice('Портал удалён', false);
-    });
+        showWorkspaceNotice('Портал и его локальная история удалены', false);
+    } catch (error) {
+        els.deletePortalError.textContent = error.message || 'Не удалось удалить портал';
+        els.deletePortalError.classList.remove('d-none');
+    } finally {
+        els.btnConfirmDeletePortal.disabled = false;
+        els.btnCancelDeletePortal.disabled = false;
+        els.btnConfirmDeletePortal.textContent = 'Удалить';
+    }
 }
 
 async function performWorkspaceOperation(operation) {

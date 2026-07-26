@@ -1,6 +1,8 @@
 package ru.abs7.b24support.service;
 
 import org.springframework.data.domain.Sort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,6 +10,7 @@ import org.springframework.web.server.ResponseStatusException;
 import ru.abs7.b24support.api.dto.PortalInstallationListResponse;
 import ru.abs7.b24support.api.dto.PortalInstallationRequest;
 import ru.abs7.b24support.api.dto.PortalInstallationResponse;
+import ru.abs7.b24support.bitrix.BitrixRestClient;
 import ru.abs7.b24support.domain.PortalInstallation;
 import ru.abs7.b24support.domain.PortalRole;
 import ru.abs7.b24support.domain.PortalStatus;
@@ -16,15 +19,22 @@ import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class PortalInstallationService {
 
-    private final PortalInstallationRepository repository;
+    private static final Logger LOG = LoggerFactory.getLogger(PortalInstallationService.class);
 
-    public PortalInstallationService(PortalInstallationRepository repository) {
+    private final PortalInstallationRepository repository;
+    private final BitrixRestClient bitrixRestClient;
+
+    public PortalInstallationService(PortalInstallationRepository repository,
+                                     BitrixRestClient bitrixRestClient) {
         this.repository = repository;
+        this.bitrixRestClient = bitrixRestClient;
     }
 
     @Transactional(readOnly = true)
@@ -110,7 +120,31 @@ public class PortalInstallationService {
     @Transactional
     public void delete(Long id) {
         PortalInstallation installation = findRequired(id);
+        unregisterBotBestEffort(installation);
         repository.delete(installation);
+        repository.flush();
+    }
+
+    private void unregisterBotBestEffort(PortalInstallation installation) {
+        if (cleanNullable(installation.getWebhookUrl()) == null
+                || cleanNullable(installation.getBotId()) == null
+                || cleanNullable(installation.getBotToken()) == null) {
+            return;
+        }
+
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("botId", Integer.parseInt(installation.getBotId()));
+            payload.put("botToken", installation.getBotToken());
+            bitrixRestClient.callJson(installation.getWebhookUrl(), "imbot.v2.Bot.unregister", payload);
+        } catch (RuntimeException exception) {
+            LOG.warn(
+                    "Не удалось удалить бота портала {} (id={}) в Bitrix24; локальные данные всё равно будут удалены: {}",
+                    installation.getTitle(),
+                    installation.getId(),
+                    exception.getMessage()
+            );
+        }
     }
 
     private void applyEditableFields(PortalInstallation installation,

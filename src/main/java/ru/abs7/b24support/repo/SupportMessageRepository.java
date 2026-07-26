@@ -22,5 +22,9 @@ public interface SupportMessageRepository extends JpaRepository<SupportMessage, 
     Optional<SupportMessage> findFirstByClientInstallation_IdAndClientDialogIdIsNotNullOrderByCreatedAtDesc(Long clientInstallationId);
 
     List<SupportMessage> findTop100ByCrmSyncStatusInAndSupportTicketIsNotNullOrderByIdAsc(Collection<CrmSyncStatus> statuses);
+
+    List<SupportMessage> findAllBySupportTicket_IdOrderByCreatedAtAsc(Long ticketId);
+
+    List<SupportMessage> findAllBySupportTicket_IdInOrderByCreatedAtAsc(Collection<Long> ticketIds);
 }
 
